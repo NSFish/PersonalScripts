@@ -1,6 +1,5 @@
 # PersonalScripts
 
-- `ramdisk` Create a virtual disk in ram to speed up heavy IO works.
 - `class-dump`
 - `class-dump-z`
 - `force_clear_trash`
@@ -9,3 +8,4 @@
 - `dragon_ball_ssa_fix` 
 - `lsar` The Unarchiver 提供的命令行工具
 - `unar` The Unarchiver 提供的命令行工具
+- `rename_recursively` 对 rename 的递归封装
