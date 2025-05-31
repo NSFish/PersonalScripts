@@ -15,15 +15,49 @@ source_dir="$1"
 target_dir="${source_dir}_avif"
 
 # 处理更多格式并自然排序
-find "$source_dir" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.webp" -o -iname "*.png" \) | sort -V | while IFS= read -r file; do
+all_files=$(find "$source_dir" -type f -not -path '*/\.*')
+convert_files=$(echo "$all_files" | grep -iE '\.(jpg|jpeg|webp|png)$')
+copy_files=$(echo "$all_files" | grep -ivE '\.(jpg|jpeg|webp|png)$')
+
+total_files=$(echo "$all_files" | wc -l)
+processed=0
+
+echo "开始处理 $total_files 个文件..."
+
+# 转换图像文件
+echo "$convert_files" | sort -V | while IFS= read -r file; do
     relative_path="${file#$source_dir/}"
     output_file="$target_dir/${relative_path%.*}.avif"
     output_dir=$(dirname "$output_file")
     
     mkdir -p "$output_dir" || { echo "目录创建失败: $output_dir"; exit 1; }
     
-    # 转换并移除所有元数据（新增 -strip）
-    magick "$file" -strip "$output_file"
+    # 显示进度
+    processed=$((processed+1))
+    echo -ne "进度: $processed/$total_files ($(printf "%.1f" $(echo "scale=2; $processed/$total_files*100" | bc)))% \r"
+    
+    # 转换图像
+    magick "$file" -strip "$output_file" || {
+        echo "警告: 转换失败 - $file" >&2
+    }
 done
 
-echo "转换完成. 目标目录: $target_dir"
+# 复制其他文件
+echo "$copy_files" | sort -V | while IFS= read -r file; do
+    relative_path="${file#$source_dir/}"
+    output_file="$target_dir/$relative_path"
+    output_dir=$(dirname "$output_file")
+    
+    mkdir -p "$output_dir" || { echo "目录创建失败: $output_dir"; exit 1; }
+    
+    # 显示进度
+    processed=$((processed+1))
+    echo -ne "进度: $processed/$total_files ($(printf "%.1f" $(echo "scale=2; $processed/$total_files*100" | bc)))% \r"
+    
+    # 复制文件
+    cp "$file" "$output_file" || {
+        echo "警告: 复制失败 - $file" >&2
+    }
+done
+
+echo -ne "\n处理完成. 目标目录: $target_dir\n"
