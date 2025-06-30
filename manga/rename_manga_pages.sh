@@ -13,15 +13,16 @@ find "$target_dir" -type d | while read dir; do
     file_count=$(echo "$files" | wc -w | tr -d '[:space:]')
 
     # 确定编号所需的最少位数
-    if [ "$file_count" -lt 100 ]; then
+    digit_count=0
+    temp_count=$file_count
+    while [ $temp_count -gt 0 ]; do
+        temp_count=$((temp_count / 10))
+        digit_count=$((digit_count + 1))
+    done
+
+    # 确保至少使用两位数
+    if [ "$digit_count" -lt 2 ]; then
         digit_count=2
-    else
-        digit_count=0
-        temp_count=$file_count
-        while [ $temp_count -gt 0 ]; do
-            temp_count=$((temp_count / 10))
-            digit_count=$((digit_count + 1))
-        done
     fi
 
     # 两步重命名防覆盖（临时文件法）
@@ -42,4 +43,3 @@ find "$target_dir" -type d | while read dir; do
 
     cd - >/dev/null
 done
-    
