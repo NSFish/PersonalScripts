@@ -1,5 +1,5 @@
 #!/opt/homebrew/bin/bash
-# 中文数字文件夹重命名工具
+# 中文数字文件夹重命名工具（优化版）
 
 # 初始化变量
 DRY_RUN=false  # 默认执行模式
@@ -33,19 +33,15 @@ check_bash_version() {
 
 # 解析命令行参数
 parse_args() {
-    echo "===== 开始解析命令行参数 =====" >&2
-    echo "参数列表: $*" >&2
-    
     while [[ $# -gt 0 ]]; do
-        echo "--- 处理参数: $1" >&2
         case "$1" in
             -n|--dry-run)
                 DRY_RUN=true
-                echo "  设置为预览模式" >&2
+                shift
                 ;;
             -v|--verbose)
                 VERBOSE=true
-                echo "  启用详细模式" >&2
+                shift
                 ;;
             -h|--help)
                 show_help
@@ -58,11 +54,9 @@ parse_args() {
                     exit 1
                 fi
                 FOLDER_PATH="$1"
-                echo "  设置文件夹路径: $FOLDER_PATH" >&2
+                shift
                 ;;
         esac
-        shift
-        echo "--- 剩余参数: $*" >&2
     done
     
     if [[ -z "$FOLDER_PATH" ]]; then
@@ -70,34 +64,6 @@ parse_args() {
         show_help
         exit 1
     fi
-    
-    echo "===== 参数解析完成 =====" >&2
-    echo "DRY_RUN: $DRY_RUN" >&2
-    echo "FOLDER_PATH: $FOLDER_PATH" >&2
-    echo "VERBOSE: $VERBOSE" >&2
-}
-
-# 检查路径有效性
-check_path() {
-    echo "===== 检查路径 =====" >&2
-    echo "正在检查路径：'$FOLDER_PATH'" >&2
-    
-    if [[ ! -e "$FOLDER_PATH" ]]; then
-        echo "错误：路径不存在" >&2
-        exit 1
-    fi
-    
-    if [[ ! -d "$FOLDER_PATH" ]]; then
-        echo "错误：路径存在但不是目录" >&2
-        exit 1
-    fi
-    
-    if [[ ! -w "$FOLDER_PATH" ]]; then
-        echo "错误：没有修改目录的权限" >&2
-        exit 1
-    fi
-    
-    echo "路径检查通过：$FOLDER_PATH" >&2
 }
 
 # 中文数字映射表
@@ -130,88 +96,62 @@ convert_chinese_number() {
     local char
     local digit_val
     
-    if [[ $VERBOSE == true ]]; then
-        echo "===== 转换中文数字: '$chinese' =====" >&2
-    fi
-    
     if [[ ${#chinese} -eq 1 ]]; then
         digit_val="${chinese_numbers[$chinese]}"
         if [[ -n "$digit_val" ]]; then
             echo "$digit_val"
             return 0
-        else
-            echo "错误：无法识别字符 '$chinese'" >&2
-            return 1
         fi
+    else
+        for ((i=0; i<${#chinese}; i++)); do
+            char="${chinese:$i:1}"
+            digit_val="${chinese_numbers[$char]}"
+            
+            if [[ $char =~ ^($units)$ ]]; then
+                if [[ $temp_digit -ne 0 ]]; then
+                    result=$((result + temp_digit * digit_val))
+                    temp_digit=0
+                elif [[ $result -eq 0 ]]; then
+                    result=$digit_val
+                fi
+            elif [[ -n "$digit_val" ]]; then
+                if [[ $temp_digit -eq 0 ]]; then
+                    temp_digit=$digit_val
+                else
+                    temp_digit=$((temp_digit * 10 + digit_val))
+                fi
+            fi
+        done
+        result=$((result + temp_digit))
+        echo "$result"
+        return 0
     fi
-    
-    for ((i=0; i<${#chinese}; i++)); do
-        char="${chinese:$i:1}"
-        digit_val="${chinese_numbers[$char]}"
-        
-        if [[ $char =~ ^($units)$ ]]; then
-            if [[ $temp_digit -ne 0 ]]; then
-                result=$((result + temp_digit * digit_val))
-                temp_digit=0
-            elif [[ $result -eq 0 ]]; then
-                result=$digit_val
-            else
-                echo "错误：连续单位字符 '$char'" >&2
-                return 1
-            fi
-        elif [[ -n "$digit_val" ]]; then
-            if [[ $temp_digit -eq 0 ]]; then
-                temp_digit=$digit_val
-            else
-                temp_digit=$((temp_digit * 10 + digit_val))
-            fi
-        else
-            echo "错误：未知字符 '$char'" >&2
-            return 1
-        fi
-    done
-    
-    result=$((result + temp_digit))
-    echo "$result"
-    return 0
+    echo "错误：无法识别数字格式" >&2
+    return 1
 }
 
 # 文件夹处理函数
 process_folder() {
     local folder="$1"
     local folder_name=$(basename "$folder")
-    local old_path="$folder"
     local new_name=""
-    local new_path=""
     
-    if [[ $folder_name =~ ^第(.+)话$ ]]; then
+    # 优化正则表达式：匹配"第X话"或"第X章"后跟任意字符的情况
+    if [[ $folder_name =~ ^第([^话章]+)(话|章)(.*)$ ]]; then
         local chinese_num="${BASH_REMATCH[1]}"
+        local suffix="${BASH_REMATCH[2]}"
+        local rest_text="${BASH_REMATCH[3]}"
         local arabic_num=$(convert_chinese_number "$chinese_num")
         
         if [[ $? -eq 0 ]]; then
-            new_name="第 $arabic_num 话"
-            new_path="$(dirname "$folder")/$new_name"
-            
+            new_name="第 $arabic_num $suffix$rest_text"
             echo "$folder_name -> $new_name"
             
             if [[ $DRY_RUN == true ]]; then
-                echo "  (预览) 重命名: $old_path -> $new_path" >&2
+                echo "  (预览) 重命名: $folder -> $(dirname "$folder")/$new_name" >&2
             else
-                echo "  执行重命名: $old_path -> $new_path" >&2
-                
-                if [[ -e "$new_path" ]]; then
-                    echo "  警告：目标文件夹已存在，跳过" >&2
-                else
-                    mv "$old_path" "$new_path"
-                    if [[ $? -eq 0 ]]; then
-                        echo "  重命名成功" >&2
-                    else
-                        echo "  错误：重命名失败" >&2
-                    fi
-                fi
+                mv "$folder" "$(dirname "$folder")/$new_name"
             fi
-        else
-            echo "跳过 $folder_name: 数字转换失败" >&2
         fi
     elif [[ $VERBOSE == true ]]; then
         echo "跳过 $folder_name: 不符合格式" >&2
@@ -222,15 +162,9 @@ process_folder() {
 main() {
     check_bash_version
     parse_args "$@"
-    check_path
     
-    echo "===== 开始处理文件夹 =====" >&2
-    echo "文件夹路径: $FOLDER_PATH" >&2
-    
-    local mode_text="执行模式"
-    if [[ $DRY_RUN == true ]]; then
-        mode_text="预览模式"
-    fi
+    echo "开始处理文件夹: $FOLDER_PATH" >&2
+    local mode_text=$(if [[ $DRY_RUN == true ]]; then echo "预览模式"; else echo "执行模式"; fi)
     echo "操作模式: $mode_text" >&2
     
     for folder in "$FOLDER_PATH"/*; do
@@ -238,8 +172,6 @@ main() {
             process_folder "$folder"
         fi
     done
-    
-    echo "===== 处理完成 =====" >&2
 }
 
 # 启动程序
