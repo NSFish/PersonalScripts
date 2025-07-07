@@ -25,8 +25,8 @@ for file in *.jpg *.jpeg *.png *.gif *.bmp; do
     # 跳过不存在的文件（当没有匹配文件时）
     [ -f "$file" ] || continue
 
-    # 使用grep提取两个下划线之间的最长部分
-    subfolder=$(echo "$file" | grep -oP '_(.*)_' | tr -d '_')
+    # 使用awk提取从右到左第一个和第二个下划线之间的内容
+    subfolder=$(echo "$file" | awk -F '_' '{n=NF; if (n>2) print $(n-1)}')
 
     # 检查是否成功提取子文件夹名
     if [ -n "$subfolder" ]; then

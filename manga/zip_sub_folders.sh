@@ -19,15 +19,21 @@ find "$parent_dir" -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r 
     parent_path=$(dirname "$folder")
     zip_path="${folder}.zip"
 
+    # ▼ 新增逻辑：检查同名压缩包是否存在 ▼
+    if [ -e "$zip_path" ]; then
+        echo "⚠️ 跳过 '$folder_name'：已存在同名压缩包"
+        continue  # 跳过当前子文件夹
+    fi
+
     echo "正在压缩: $folder_name"
     
     # 进入父目录后再压缩，避免路径解析问题
     (cd "$parent_path" && zip -r -q "$zip_path" "$folder_name" -x "*.DS_Store" -x "__MACOSX*")
     
     if [ $? -eq 0 ]; then
-        echo "✓ 已创建: ${folder_name}.zip"
+        echo "✅ 已创建: ${folder_name}.zip"
     else
-        echo "✗ 压缩失败: $folder_name"
+        echo "❌ 压缩失败: $folder_name"
     fi
 done
 
