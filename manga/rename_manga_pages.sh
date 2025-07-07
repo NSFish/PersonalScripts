@@ -4,7 +4,7 @@ target_dir="$1"
 find "$target_dir" -type d | while read dir; do
     [ "$dir" = "$target_dir" ] && continue
 
-    cd "$dir" 2>/dev/null || continue
+    cd "$dir" || continue
 
     # 获取自然排序后的文件列表
     files=$(ls | sort -V)
