@@ -33,15 +33,15 @@
 #   -h, --help     显示帮助文档
 #
 # 输出目录结构：
-#   output/
+#   <父目录的父目录>/output/
 #     ├── 子目录A（3）/
 #     │   ├── 匹配图片 1.jpg
 #     │   ├── 匹配图片 2.jpg
 #     │   ├── json/
 #     │   │   ├── 图片 1.json
-#     │   │   └└└└── ...
-#     │   └└└└── ocr_errors.log (可选)
-#     └└└└── ...
+#     │   │   └── ...
+#     │   └── ocr_errors.log (可选)
+#     └── ...
 #
 # 依赖要求：
 #   1. macos-vision-ocr-arm64: Apple Vision OCR 引擎
@@ -53,7 +53,7 @@ PARENT_DIR=""
 KEYWORDS=()
 VERBOSE=false
 REC_LANGS="zh-Hans,zh-Hant,en-US"
-OUTPUT_DIR="output"
+OUTPUT_DIR=""
 
 # ANSI 颜色代码
 GREEN='\033[0;32m'
@@ -64,7 +64,7 @@ NC='\033[0m' # 重置颜色
 # 帮助信息
 show_help() {
     echo "用法: $0 [选项] <父文件夹路径> <关键词1> <关键词2> ..."
-    echo "优化的 OCR 批处理器，固定输出目录为 'output'"
+    echo "优化的 OCR 批处理器，输出目录为 <父目录的父目录>/output"
     echo ""
     echo "选项:"
     echo "  -n, --dry-run    预览模式（执行 OCR 但不移动图片，而是复制图片）"
@@ -155,7 +155,7 @@ process_subdir() {
 
     # 检查 OCR 是否成功
     if [ $? -ne 0 ]; then
-        echo -e "${RED}❌ OCR 处理失败: $sub_dir${NC}"
+        echo -e "${RED}❌❌ OCR 处理失败: $sub_dir${NC}"
         # 将错误写入日志
         echo "$ocr_errors" > "$ocr_error_log"
         cat "$ocr_error_log"
@@ -211,7 +211,7 @@ process_subdir() {
                         match_count=$((match_count + 1))
                     }
                 else
-                    echo -e "${RED}   ❌ 图片不存在: $img_path${NC}"
+                    echo -e "${RED}   ❌❌ 图片不存在: $img_path${NC}"
                 fi
             else
                 if [ -f "$img_path" ]; then
@@ -220,7 +220,7 @@ process_subdir() {
                         match_count=$((match_count + 1))
                     }
                 else
-                    echo -e "${RED}   ❌ 图片不存在: $img_path${NC}"
+                    echo -e "${RED}   ❌❌ 图片不存在: $img_path${NC}"
                 fi
             fi
         fi
@@ -255,12 +255,16 @@ main() {
     parse_args "$@"
     check_dependencies
 
+    # 设置输出目录（与传入目录同级的output）
+    OUTPUT_BASE=$(dirname "$PARENT_DIR")
+    OUTPUT_DIR="$OUTPUT_BASE/output"
+    
     # 创建输出目录
     if [ -d "$OUTPUT_DIR" ]; then
         rm -rf "$OUTPUT_DIR"
     fi
     mkdir -p "$OUTPUT_DIR"
-    echo -e "${GREEN}📁 创建输出目录: $OUTPUT_DIR${NC}"
+    echo -e "${GREEN}📁📁 创建输出目录: $OUTPUT_DIR${NC}"
 
     # 记录开始时间
     local start_time
@@ -274,7 +278,7 @@ main() {
     local total_dirs=${#subdirs[@]}
 
     if [ $total_dirs -eq 0 ]; then
-        echo -e "${RED}❌ 在 $PARENT_DIR 中找不到子目录${NC}"
+        echo -e "${RED}❌❌ 在 $PARENT_DIR 中找不到子目录${NC}"
         exit 1
     fi
 
@@ -284,7 +288,7 @@ main() {
     local processed=0
     for sub_dir in "${subdirs[@]}"; do
         processed=$((processed + 1))
-        echo "🔄 处理进度: $processed/$total_dirs - $(basename "$sub_dir")"
+        echo "🔄🔄 处理进度: $processed/$total_dirs - $(basename "$sub_dir")"
         process_subdir "$sub_dir"
     done
 
