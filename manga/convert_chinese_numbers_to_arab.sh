@@ -143,9 +143,13 @@ process_folder() {
         local arabic_num=$(convert_chinese_number "$chinese_num")
         
         if [[ $? -eq 0 ]]; then
-            new_name="$arabic_num $rest_text"
-            # 去除多余的前导空格
-            new_name=$(echo "$new_name" | sed 's/^ *//')
+            if [[ -z "$rest_text" ]]; then
+                new_name="$arabic_num"
+            else
+                new_name="$arabic_num $rest_text"
+                # 去除多余的前导空格
+                new_name=$(echo "$new_name" | sed 's/^ *//')
+            fi
             echo "$folder_name -> $new_name"
             
             if [[ $DRY_RUN == true ]]; then
