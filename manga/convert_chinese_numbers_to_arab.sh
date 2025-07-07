@@ -139,12 +139,13 @@ process_folder() {
     # 优化正则表达式：匹配"第X话"或"第X章"后跟任意字符的情况
     if [[ $folder_name =~ ^第([^话章]+)(话|章)(.*)$ ]]; then
         local chinese_num="${BASH_REMATCH[1]}"
-        local suffix="${BASH_REMATCH[2]}"
         local rest_text="${BASH_REMATCH[3]}"
         local arabic_num=$(convert_chinese_number "$chinese_num")
         
         if [[ $? -eq 0 ]]; then
-            new_name="第 $arabic_num $suffix$rest_text"
+            new_name="$arabic_num $rest_text"
+            # 去除多余的前导空格
+            new_name=$(echo "$new_name" | sed 's/^ *//')
             echo "$folder_name -> $new_name"
             
             if [[ $DRY_RUN == true ]]; then
