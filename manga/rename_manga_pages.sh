@@ -5,6 +5,8 @@ target_dir="$1"
 find "$target_dir" -type d | while read dir; do
     [ "$dir" = "$target_dir" ] && continue
 
+    echo "🛠  正在处理文件夹: $dir"
+    
     cd "$dir" || continue
 
     # 获取自然排序后的文件列表
@@ -26,6 +28,12 @@ find "$target_dir" -type d | while read dir; do
         digit_count=2
     fi
 
+    # 创建数组存储原始文件名
+    original_names=()
+    while IFS= read -r file; do
+        original_names+=("$file")
+    done <<< "$files"
+
     # 两步重命名防覆盖（临时文件法）
     count=0
     for file in $files; do
@@ -36,9 +44,17 @@ find "$target_dir" -type d | while read dir; do
 
     # 正式重命名
     count=0
-    ls | sort -V | while read temp_file; do
+    ls | grep '^temp_' | sort -V | while read temp_file; do
         ext="${temp_file##*.}"
-        mv "$temp_file" "$(printf "%0${digit_count}d.%s" $count "$ext")" 2>/dev/null
+        new_name="$(printf "%0${digit_count}d.%s" $count "$ext")"
+        
+        # 获取对应的原始文件名
+        original_name="${original_names[$count]}"
+        
+        # 添加重命名成功提示
+        echo "✅  \"$original_name\" -> \"$new_name\""
+        
+        mv "$temp_file" "$new_name" 2>/dev/null
         ((count++))
     done
 
