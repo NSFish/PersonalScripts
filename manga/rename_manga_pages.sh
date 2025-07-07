@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/opt/homebrew/bin/bash
+
 target_dir="$1"
 
 find "$target_dir" -type d | while read dir; do
