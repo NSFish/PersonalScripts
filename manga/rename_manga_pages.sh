@@ -65,12 +65,26 @@ process_directory() {
     
     cd "$dir" || return
     
-    # 获取自然排序后的文件列表
-    files=$(ls | sort -V)
+    # 获取非隐藏文件列表（排除以点开头的文件）
+    files=()
+    while IFS= read -r -d $'\0' file; do
+        # 去掉前面的 "./" 路径部分
+        file="${file#./}"
+        # 排除隐藏文件（以点开头的文件）
+        [[ "$file" = .* ]] && continue
+        files+=("$file")
+    done < <(find . -maxdepth 1 -type f -print0 | sort -V -z)
     
     # 统计文件数量
-    file_count=$(echo "$files" | wc -w | tr -d '[:space:]')
+    file_count=${#files[@]}
     
+    # 没有文件时直接返回
+    if [[ $file_count -eq 0 ]]; then
+        [[ "$VERBOSE" == true ]] && echo "  目录为空，跳过处理"
+        cd - >/dev/null
+        return
+    fi
+
     # 确定编号位数
     digit_count=0
     temp_count=$file_count
@@ -83,18 +97,20 @@ process_directory() {
     [[ "$digit_count" -lt 2 ]] && digit_count=2
     
     # 创建数组存储原始文件名
-    original_names=()
-    while IFS= read -r file; do
-        original_names+=("$file")
-    done <<< "$files"
+    original_names=("${files[@]}")
     
     # Dry-run模式只显示操作
     if [[ "$DRY_RUN" == true ]]; then
-        echo "📋 文件夹 $dir 的预览操作:"
-        for ((i=0; i<${#original_names[@]}; i++)); do
-            ext="${original_names[$i]##*.}"
-            new_name="$(printf "%0${digit_count}d.%s" $i "$ext")"
-            echo "  ✅  \"${original_names[$i]}\" -> \"$new_name\""
+        for ((i=0; i<file_count; i++)); do
+            file="${original_names[$i]}"
+            # 安全处理扩展名
+            if [[ "$file" =~ \.([^.]+)$ ]]; then
+                ext="${BASH_REMATCH[1]}"
+                new_name="$(printf "%0${digit_count}d.%s" $i "$ext")"
+            else
+                new_name="$(printf "%0${digit_count}d" $i)"
+            fi
+            echo "  ✅  \"$file\" -> \"$new_name\""
         done
         cd - >/dev/null
         return
@@ -102,19 +118,40 @@ process_directory() {
     
     # 实际执行的两步重命名
     count=0
-    for file in $files; do
-        ext="${file##*.}"
-        mv "$file" "temp_$(printf "%0${digit_count}d" $count).$ext" 2>/dev/null
+    for file in "${original_names[@]}"; do
+        # 安全处理扩展名
+        if [[ "$file" =~ \.([^.]+)$ ]]; then
+            ext="${BASH_REMATCH[1]}"
+            new_name="temp_$(printf "%0${digit_count}d.%s" $count "$ext")"
+        else
+            new_name="temp_$(printf "%0${digit_count}d" $count)"
+        fi
+        mv -- "$file" "$new_name" 2>/dev/null
         ((count++))
     done
     
     count=0
-    ls | grep '^temp_' | sort -V | while read -r temp_file; do
-        ext="${temp_file##*.}"
-        new_name="$(printf "%0${digit_count}d.%s" $count "$ext")"
+    # 获取临时文件列表（安全方式）
+    temp_files=()
+    while IFS= read -r -d $'\0' file; do
+        file="${file#./}"
+        # 排除隐藏文件（以点开头的文件）
+        [[ "$file" = .* ]] && continue
+        temp_files+=("$file")
+    done < <(find . -maxdepth 1 -name 'temp_*' -print0 | sort -V -z)
+    
+    for file in "${temp_files[@]}"; do
+        # 处理最终文件名
+        if [[ "$file" =~ \.([^.]+)$ ]]; then
+            ext="${BASH_REMATCH[1]}"
+            new_name="$(printf "%0${digit_count}d.%s" $count "$ext")"
+        else
+            new_name="$(printf "%0${digit_count}d" $count)"
+        fi
+        
         original_name="${original_names[$count]}"
         echo "✅  \"$original_name\" -> \"$new_name\""
-        mv "$temp_file" "$new_name" 2>/dev/null
+        mv -- "$file" "$new_name" 2>/dev/null
         ((count++))
     done
     
@@ -126,7 +163,7 @@ main() {
     parse_args "$@"
     
     if [[ "$DRY_RUN" == true ]]; then
-        echo "🏃‍♂️ 运行模式: 预览 (dry-run)"
+        echo "🏃 运行模式: 预览 (dry-run)"
         echo "  注: 不会实际修改文件"
     else
         echo "🏃‍♂️ 运行模式: 实际执行"
@@ -134,10 +171,11 @@ main() {
     
     [[ "$VERBOSE" == true ]] && echo "🔍 扫描目录: $target_dir"
     
-    find "$target_dir" -type d | while read -r dir; do
+    # 使用进程替换避免子Shell问题
+    while IFS= read -r dir; do
         [[ "$dir" == "$target_dir" ]] && continue
         process_directory "$dir"
-    done
+    done < <(find "$target_dir" -type d)
 }
 
 # 启动程序
