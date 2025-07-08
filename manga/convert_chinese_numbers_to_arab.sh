@@ -85,9 +85,6 @@ declare -A chinese_numbers=(
     ["$(printf "\\u4ebf")"]="100000000" # 亿
 )
 
-# 单位字符的Unicode码点
-units="$(printf "\\u5341")|$(printf "\\u767e")|$(printf "\\u5343")|$(printf "\\u4e07")|$(printf "\\u4ebf")"
-
 # 中文数字转换函数
 convert_chinese_number() {
     local chinese="$1"
@@ -96,38 +93,57 @@ convert_chinese_number() {
     local char
     local digit_val
     
-    if [[ ${#chinese} -eq 1 ]]; then
-        digit_val="${chinese_numbers[$chinese]}"
-        if [[ -n "$digit_val" ]]; then
-            echo "$digit_val"
-            return 0
-        fi
-    else
-        for ((i=0; i<${#chinese}; i++)); do
-            char="${chinese:$i:1}"
-            digit_val="${chinese_numbers[$char]}"
-            
-            if [[ $char =~ ^($units)$ ]]; then
-                if [[ $temp_digit -ne 0 ]]; then
-                    result=$((result + temp_digit * digit_val))
-                    temp_digit=0
-                elif [[ $result -eq 0 ]]; then
-                    result=$digit_val
-                fi
-            elif [[ -n "$digit_val" ]]; then
-                if [[ $temp_digit -eq 0 ]]; then
-                    temp_digit=$digit_val
-                else
-                    temp_digit=$((temp_digit * 10 + digit_val))
-                fi
-            fi
-        done
-        result=$((result + temp_digit))
-        echo "$result"
+    # 处理纯阿拉伯数字的情况
+    if [[ $chinese =~ ^[0-9]+$ ]]; then
+        echo "$chinese"
         return 0
     fi
-    echo "错误：无法识别数字格式" >&2
-    return 1
+    
+    # 处理零的特殊情况
+    if [[ "$chinese" == "$(printf "\\u96f6")" ]]; then
+        echo "0"
+        return 0
+    fi
+    
+    # 处理单位字符的Unicode码点
+    local units="$(printf "\\u5341")|$(printf "\\u767e")|$(printf "\\u5343")|$(printf "\\u4e07")|$(printf "\\u4ebf")"
+    
+    # 优化转换逻辑：先处理所有单位
+    for unit in $(printf "\\u4ebf") $(printf "\\u4e07") $(printf "\\u5343") $(printf "\\u767e") $(printf "\\u5341"); do
+        if [[ $chinese == *"$unit"* ]]; then
+            local part="${chinese%%"$unit"*}"
+            local remainder="${chinese#*"$unit"}"
+            
+            if [[ -n "$part" ]]; then
+                local part_value=$(convert_chinese_number "$part")
+                result=$((result + part_value * ${chinese_numbers[$unit]}))
+            else
+                # 处理"十"这样的单位单独出现的情况
+                result=$((result + ${chinese_numbers[$unit]}))
+            fi
+            chinese="$remainder"
+        fi
+    done
+    
+    # 处理剩余的数字
+    for ((i=0; i<${#chinese}; i++)); do
+        char="${chinese:$i:1}"
+        digit_val="${chinese_numbers[$char]}"
+        
+        if [[ -n "$digit_val" ]]; then
+            temp_digit=$((temp_digit * 10 + digit_val))
+        fi
+    done
+    
+    result=$((result + temp_digit))
+    
+    if [[ $result -gt 0 ]]; then
+        echo "$result"
+        return 0
+    else
+        echo "错误：无法识别数字格式" >&2
+        return 1
+    fi
 }
 
 # 文件夹处理函数
@@ -135,31 +151,47 @@ process_folder() {
     local folder="$1"
     local folder_name=$(basename "$folder")
     local new_name=""
+    local is_processed=false
+    local status=""
     
-    # 优化正则表达式：匹配"第X话"或"第X章"后跟任意字符的情况
-    if [[ $folder_name =~ ^第([^话章]+)(话|章)(.*)$ ]]; then
+    # 优化正则表达式：支持更多中文数字格式
+    if [[ $folder_name =~ ^[第]?([^话章]+)[话章](.*)$ ]]; then
         local chinese_num="${BASH_REMATCH[1]}"
-        local rest_text="${BASH_REMATCH[3]}"
-        local arabic_num=$(convert_chinese_number "$chinese_num")
+        local rest_text="${BASH_REMATCH[2]}"
+        local arabic_num=$(convert_chinese_number "$chinese_num" 2>/dev/null)
         
         if [[ $? -eq 0 ]]; then
+            # 处理剩余文本中的前缀空格
+            rest_text=$(echo "$rest_text" | sed -e 's/^[[:space:]]*//' -e 's/^[[:punct:]]*//')
+            
             if [[ -z "$rest_text" ]]; then
                 new_name="$arabic_num"
             else
                 new_name="$arabic_num $rest_text"
-                # 去除多余的前导空格
-                new_name=$(echo "$new_name" | sed 's/^ *//')
             fi
+            
+            # 总是显示转换过程
             echo "$folder_name -> $new_name"
+            is_processed=true
             
             if [[ $DRY_RUN == true ]]; then
-                echo "  (预览) 重命名: $folder -> $(dirname "$folder")/$new_name" >&2
+                if [[ $VERBOSE == true ]]; then
+                    echo "  (预览) 重命名: $folder -> $(dirname "$folder")/$new_name" >&2
+                fi
             else
-                mv "$folder" "$(dirname "$folder")/$new_name"
+                mv -- "$folder" "$(dirname "$folder")/$new_name"
             fi
+        else
+            # 显示转换失败信息
+            echo "$folder_name -> 转换失败 (无法识别的数字格式: $chinese_num)"
         fi
-    elif [[ $VERBOSE == true ]]; then
-        echo "跳过 $folder_name: 不符合格式" >&2
+    else
+        # 检查是否是纯数字文件夹名
+        if [[ $folder_name =~ ^[0-9]+[[:space:]]*.*$ ]]; then
+            echo "$folder_name -> 无须处理 (已经是数字格式)"
+        else
+            echo "$folder_name -> 无须处理 (不符合转换格式)"
+        fi
     fi
 }
 
@@ -171,11 +203,11 @@ main() {
     echo "开始处理文件夹: $FOLDER_PATH" >&2
     local mode_text=$(if [[ $DRY_RUN == true ]]; then echo "预览模式"; else echo "执行模式"; fi)
     echo "操作模式: $mode_text" >&2
+    echo ""
     
-    for folder in "$FOLDER_PATH"/*; do
-        if [[ -d "$folder" ]]; then
-            process_folder "$folder"
-        fi
+    # 递归处理所有子文件夹
+    find "$FOLDER_PATH" -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r -d $'\0' folder; do
+        process_folder "$folder"
     done
 }
 
