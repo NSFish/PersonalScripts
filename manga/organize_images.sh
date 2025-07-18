@@ -21,7 +21,7 @@ cd "$folder_path" || exit
 shopt -s nocaseglob
 
 # 遍历所有图片文件（支持jpg、jpeg、png、gif等常见格式）
-for file in *.jpg *.jpeg *.png *.gif *.bmp; do
+for file in *.jpg *.jpeg *.png *.gif *.bmp *.avif; do
     # 跳过不存在的文件（当没有匹配文件时）
     [ -f "$file" ] || continue
 
