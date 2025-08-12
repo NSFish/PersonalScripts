@@ -70,7 +70,6 @@ fi
 cat >> "$OPF_FILE" <<EOF
   </manifest>
   <spine toc="toc">
-    <!-- 章节按文件顺序排列 -->
 EOF
 
 # 遍历目标文件夹下的Text子文件夹中的XHTML文件添加到spine
@@ -92,5 +91,4 @@ cat >> "$OPF_FILE" <<EOF
 </package>
 EOF
 
-echo "content.opf文件已生成在: $OPF_FILE"
-echo "manifest项顺序: toc -> cover -> css -> xhtml文件"
+echo "已生成: $OPF_FILE"
