@@ -23,7 +23,7 @@ fi
 # 定义content.opf文件路径
 OPF_FILE="$TARGET_DIR/content.opf"
 
-# 创建content.opf文件
+# 创建content.opf文件头部
 cat > "$OPF_FILE" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="uuid_id">
@@ -44,12 +44,14 @@ cat > "$OPF_FILE" <<EOF
     <meta name="cover" content="cover"/>
   </metadata>
   <manifest>
-    <item id="cover" href="cover.jpg" media-type="image/jpeg"/>
-    <item id="style" href="style.css" media-type="text/css"/>
-    <item id="toc" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
 EOF
 
-# 遍历目标文件夹下的Text子文件夹中的XHTML文件添加到manifest
+# 按顺序添加manifest项：toc、cover、css
+echo "    <item id=\"toc\" href=\"toc.ncx\" media-type=\"application/x-dtbncx+xml\"/>" >> "$OPF_FILE"
+echo "    <item id=\"cover\" href=\"cover.jpg\" media-type=\"image/jpeg\"/>" >> "$OPF_FILE"
+echo "    <item id=\"style\" href=\"style.css\" media-type=\"text/css\"/>" >> "$OPF_FILE"
+
+# 遍历目标文件夹下的Text子文件夹中的XHTML文件添加到manifest（放在最后）
 TEXT_DIR="$TARGET_DIR/Text"
 if [ -d "$TEXT_DIR" ]; then
     for xhtml_file in "$TEXT_DIR"/*.xhtml; do
@@ -64,6 +66,7 @@ else
     echo "警告: 未找到Text文件夹 '$TEXT_DIR'，可能导致manifest不完整"
 fi
 
+# 继续添加spine和guide部分
 cat >> "$OPF_FILE" <<EOF
   </manifest>
   <spine toc="toc">
@@ -90,3 +93,4 @@ cat >> "$OPF_FILE" <<EOF
 EOF
 
 echo "content.opf文件已生成在: $OPF_FILE"
+echo "manifest项顺序: toc -> cover -> css -> xhtml文件"
