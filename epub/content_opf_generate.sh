@@ -66,10 +66,11 @@ else
     echo "警告: 未找到Text文件夹 '$TEXT_DIR'，可能导致manifest不完整"
 fi
 
-# 继续添加spine和guide部分
+# 继续添加spine部分（已移除guide部分）
 cat >> "$OPF_FILE" <<EOF
     </manifest>
     <spine toc="toc">
+        <itemref idref="cover" linear="no"/>
 EOF
 
 # 遍历目标文件夹下的Text子文件夹中的XHTML文件添加到spine
@@ -78,16 +79,15 @@ if [ -d "$TEXT_DIR" ]; then
         if [ -f "$xhtml_file" ]; then
             filename=$(basename "$xhtml_file")
             item_id="${filename%.xhtml}"
-            echo "        <itemref idref=\"$item_id\"/>" >> "$OPF_FILE"
+            # 为每个xhtml文件添加linear="yes"属性
+            echo "        <itemref idref=\"$item_id\" linear=\"yes\"/>" >> "$OPF_FILE"
         fi
     done
 fi
 
+# 直接结束spine和package部分（已移除guide）
 cat >> "$OPF_FILE" <<EOF
     </spine>
-    <guide>
-        <reference type="cover" title="Cover" href="cover.jpg"/>
-    </guide>
 </package>
 EOF
 
