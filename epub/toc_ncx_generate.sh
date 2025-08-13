@@ -14,6 +14,13 @@ if [ ! -d "$XHTML_DIR" ]; then
     exit 1
 fi
 
+# 获取传入文件夹的父目录
+PARENT_DIR=$(dirname "$(realpath "$XHTML_DIR")")
+if [ -z "$PARENT_DIR" ]; then
+    echo "错误: 无法获取文件夹的父目录"
+    exit 1
+fi
+
 # 检查是否安装了xmlstarlet
 if ! command -v xmlstarlet &> /dev/null; then
     echo "错误: 未找到xmlstarlet，请先使用 'brew install xmlstarlet' 安装"
@@ -115,8 +122,8 @@ for ((i=0; i<volume_count; i++)); do
     echo "</navPoint>" >> "$navpoints"
 done
 
-# 生成toc.ncx文件
-cat << EOF > toc.ncx
+# 生成toc.ncx文件（保存到父目录）
+cat << EOF > "$PARENT_DIR/toc.ncx"
 <?xml version="1.0" encoding="UTF-8"?>
 <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
   <head>
@@ -137,6 +144,6 @@ EOF
 # 清理临时文件
 rm "$navpoints"
 
-echo "成功生成toc.ncx文件，包含:"
-echo " - $volume_count 个卷"
-echo " - $chapter_count 个章"
+echo "已在 '$PARENT_DIR' 目录生成 toc.ncx 文件，包含:"
+echo " - $volume_count 个分卷"
+echo " - $chapter_count 个章节"
