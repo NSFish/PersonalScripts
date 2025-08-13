@@ -27,29 +27,29 @@ OPF_FILE="$TARGET_DIR/content.opf"
 cat > "$OPF_FILE" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="uuid_id">
-  <metadata xmlns:opf="http://www.idpf.org/2007/opf"
-    xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:identifier opf:scheme="uuid" id="uuid_id"></dc:identifier>
-    <dc:title></dc:title>
-    <dc:creator opf:role="aut" opf:file-as=""></dc:creator>
-    <dc:description></dc:description>
-    <dc:subject></dc:subject>
-    <dc:subject></dc:subject>
-    <dc:subject></dc:subject>
-    <dc:subject></dc:subject>
-    <dc:date></dc:date>
-    <dc:language></dc:language>
-    <dc:format></dc:format>
-    <dc:type></dc:type>
-    <meta name="cover" content="cover"/>
-  </metadata>
-  <manifest>
+    <metadata xmlns:opf="http://www.idpf.org/2007/opf"
+        xmlns:dc="http://purl.org/dc/elements/1.1/">
+        <dc:identifier opf:scheme="uuid" id="uuid_id"></dc:identifier>
+        <dc:title></dc:title>
+        <dc:creator opf:role="aut" opf:file-as=""></dc:creator>
+        <dc:description></dc:description>
+        <dc:subject></dc:subject>
+        <dc:subject></dc:subject>
+        <dc:subject></dc:subject>
+        <dc:subject></dc:subject>
+        <dc:date></dc:date>
+        <dc:language></dc:language>
+        <dc:format></dc:format>
+        <dc:type></dc:type>
+        <meta name="cover" content="cover"/>
+    </metadata>
+    <manifest>
 EOF
 
 # 按顺序添加manifest项：toc、cover、css
-echo "    <item id=\"toc\" href=\"toc.ncx\" media-type=\"application/x-dtbncx+xml\"/>" >> "$OPF_FILE"
-echo "    <item id=\"cover\" href=\"cover.jpg\" media-type=\"image/jpeg\"/>" >> "$OPF_FILE"
-echo "    <item id=\"style\" href=\"style.css\" media-type=\"text/css\"/>" >> "$OPF_FILE"
+echo "        <item id=\"toc\" href=\"toc.ncx\" media-type=\"application/x-dtbncx+xml\"/>" >> "$OPF_FILE"
+echo "        <item id=\"cover\" href=\"cover.jpg\" media-type=\"image/jpeg\"/>" >> "$OPF_FILE"
+echo "        <item id=\"style\" href=\"style.css\" media-type=\"text/css\"/>" >> "$OPF_FILE"
 
 # 遍历目标文件夹下的Text子文件夹中的XHTML文件添加到manifest（放在最后）
 TEXT_DIR="$TARGET_DIR/Text"
@@ -59,7 +59,7 @@ if [ -d "$TEXT_DIR" ]; then
             # 获取文件名（不含路径和扩展名）
             filename=$(basename "$xhtml_file")
             item_id="${filename%.xhtml}"
-            echo "    <item id=\"$item_id\" href=\"Text/$filename\" media-type=\"application/xhtml+xml\"/>" >> "$OPF_FILE"
+            echo "        <item id=\"$item_id\" href=\"Text/$filename\" media-type=\"application/xhtml+xml\"/>" >> "$OPF_FILE"
         fi
     done
 else
@@ -68,8 +68,8 @@ fi
 
 # 继续添加spine和guide部分
 cat >> "$OPF_FILE" <<EOF
-  </manifest>
-  <spine toc="toc">
+    </manifest>
+    <spine toc="toc">
 EOF
 
 # 遍历目标文件夹下的Text子文件夹中的XHTML文件添加到spine
@@ -78,16 +78,16 @@ if [ -d "$TEXT_DIR" ]; then
         if [ -f "$xhtml_file" ]; then
             filename=$(basename "$xhtml_file")
             item_id="${filename%.xhtml}"
-            echo "    <itemref idref=\"$item_id\"/>" >> "$OPF_FILE"
+            echo "        <itemref idref=\"$item_id\"/>" >> "$OPF_FILE"
         fi
     done
 fi
 
 cat >> "$OPF_FILE" <<EOF
-  </spine>
-  <guide>
-    <reference type="cover" title="Cover" href="cover.jpg"/>
-  </guide>
+    </spine>
+    <guide>
+        <reference type="cover" title="Cover" href="cover.jpg"/>
+    </guide>
 </package>
 EOF
 
