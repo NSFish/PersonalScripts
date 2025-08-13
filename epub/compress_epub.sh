@@ -50,4 +50,4 @@ mv "${parent_dir}/${dir_name}.zip" "${parent_dir}/${dir_name}.epub"
 cd - > /dev/null || exit
 
 echo "✅ EPUB生成成功！路径：${parent_dir}/${dir_name}.epub"
-echo "💡 已确保：mimetype未压缩且是第一个条目，且内容直接在EPUB根目录（无外层文件夹）。"
+echo "💡 已确保 mimetype 未压缩且是第一个条目，且内容直接在 EPUB 根目录（无外层文件夹）。"

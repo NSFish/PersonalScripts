@@ -17,6 +17,9 @@ if [ -z "$PARENT_DIR" ]; then
     echo "错误: 无法获取文件夹的父目录"
     exit 1
 fi
+# 获取文件夹基名用于路径前缀
+FOLDER_NAME=$(basename "$XHTML_DIR")  # <-- 新增此行
+
 # 检查是否安装了xmlstarlet
 if ! command -v xmlstarlet &> /dev/null; then
     echo "错误: 未找到xmlstarlet，请先使用 'brew install xmlstarlet' 安装"
@@ -76,7 +79,8 @@ while IFS= read -r file; do
         echo "        <navPoint id=\"$volume_id\" playOrder=\"$playorder\">" >> "$navpoints"
         # 卷内元素：比卷多缩进4空格（共12空格）
         echo "            <navLabel><text>$title</text></navLabel>" >> "$navpoints"
-        echo "            <content src=\"$filename\"/>" >> "$navpoints"
+        # 修改路径：添加文件夹名前缀
+        echo "            <content src=\"$FOLDER_NAME/$filename\"/>" >> "$navpoints"  # <-- 修改此行
         
     elif echo "$title" | grep -q "第.*章"; then
         # 处理章
@@ -91,7 +95,8 @@ while IFS= read -r file; do
             echo "        <navPoint id=\"$current_volume_id\" playOrder=\"$playorder\">" >> "$navpoints"
             # 默认卷内元素：缩进12空格
             echo "            <navLabel><text>默认卷</text></navLabel>" >> "$navpoints"
-            echo "            <content src=\"$filename\"/>" >> "$navpoints"
+            # 修改路径：添加文件夹名前缀
+            echo "            <content src=\"$FOLDER_NAME/$filename\"/>" >> "$navpoints"  # <-- 修改此行
             playorder=$((playorder + 1))
         fi
         
@@ -99,7 +104,8 @@ while IFS= read -r file; do
         echo "            <navPoint id=\"$chapter_id\" playOrder=\"$playorder\">" >> "$current_volume_chapters"
         # 章节内元素：比章节多缩进4空格（共16空格）
         echo "                <navLabel><text>$title</text></navLabel>" >> "$current_volume_chapters"
-        echo "                <content src=\"$filename\"/>" >> "$current_volume_chapters"
+        # 修改路径：添加文件夹名前缀
+        echo "                <content src=\"$FOLDER_NAME/$filename\"/>" >> "$current_volume_chapters"  # <-- 修改此行
         echo "            </navPoint>" >> "$current_volume_chapters"
         
     else
@@ -116,7 +122,8 @@ while IFS= read -r file; do
             echo "        <navPoint id=\"$current_volume_id\" playOrder=\"$playorder\">" >> "$navpoints"
             # 默认卷内元素：缩进12空格
             echo "            <navLabel><text>默认卷</text></navLabel>" >> "$navpoints"
-            echo "            <content src=\"$filename\"/>" >> "$navpoints"
+            # 修改路径：添加文件夹名前缀
+            echo "            <content src=\"$FOLDER_NAME/$filename\"/>" >> "$navpoints"  # <-- 修改此行
             playorder=$((playorder + 1))
         fi
         
@@ -124,7 +131,8 @@ while IFS= read -r file; do
         echo "            <navPoint id=\"$chapter_id\" playOrder=\"$playorder\">" >> "$current_volume_chapters"
         # 章节内元素：比章节多缩进4空格（共16空格）
         echo "                <navLabel><text>$title</text></navLabel>" >> "$current_volume_chapters"
-        echo "                <content src=\"$filename\"/>" >> "$current_volume_chapters"
+        # 修改路径：添加文件夹名前缀
+        echo "                <content src=\"$FOLDER_NAME/$filename\"/>" >> "$current_volume_chapters"  # <-- 修改此行
         echo "            </navPoint>" >> "$current_volume_chapters"
     fi
 done <<< "$XHTML_FILES"
