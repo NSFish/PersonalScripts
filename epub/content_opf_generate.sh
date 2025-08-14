@@ -20,16 +20,19 @@ if ! command -v xmlstarlet &> /dev/null; then
     exit 1
 fi
 
+# 生成UUID (保留破折号，使用默认格式)
+NEW_UUID=$(uuidgen)
+
 # 定义content.opf文件路径
 OPF_FILE="$TARGET_DIR/content.opf"
 
-# 创建content.opf文件头部
+# 创建content.opf文件头部（包含新生成的UUID）
 cat > "$OPF_FILE" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="uuid_id">
     <metadata xmlns:opf="http://www.idpf.org/2007/opf"
         xmlns:dc="http://purl.org/dc/elements/1.1/">
-        <dc:identifier opf:scheme="uuid" id="uuid_id"></dc:identifier>
+        <dc:identifier opf:scheme="uuid" id="uuid_id">$NEW_UUID</dc:identifier>
         <dc:title></dc:title>
         <dc:creator opf:role="aut" opf:file-as=""></dc:creator>
         <dc:description></dc:description>
@@ -92,3 +95,28 @@ cat >> "$OPF_FILE" <<EOF
 EOF
 
 echo "已生成: $OPF_FILE"
+echo "使用的UUID: $NEW_UUID"
+
+# 检查并更新toc.ncx文件
+TOC_FILE="$TARGET_DIR/toc.ncx"
+if [ -f "$TOC_FILE" ]; then
+    # 备份原始文件
+    cp "$TOC_FILE" "${TOC_FILE}.bak"
+    
+    # 更新toc.ncx中的UUID
+    xmlstarlet ed -L -N ncx="http://www.daisy.org/z3986/2005/ncx/" \
+        --update '//ncx:meta[@name="dtb:uid"]/@content' \
+        --value "$NEW_UUID" \
+        "$TOC_FILE"
+    
+    # 检查更新是否成功
+    if [ $? -eq 0 ]; then
+        echo "已更新toc.ncx中的UUID: $NEW_UUID"
+        echo "原始文件备份为: ${TOC_FILE}.bak"
+    else
+        echo "错误: 更新toc.ncx文件失败"
+        echo "请检查文件格式或手动更新"
+    fi
+else
+    echo "注意: 未找到toc.ncx文件，未进行UUID更新"
+fi
