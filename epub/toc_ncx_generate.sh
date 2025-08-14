@@ -1,52 +1,62 @@
-#!/bin/bash
+#!/opt/homebrew/bin/bash
 
 # 检查是否提供了文件夹路径参数
 if [ $# -ne 1 ]; then
-    echo "使用方法: $0 <xhtml文件夹路径>"
+    echo "使用方法: $0 <xhtml 文件夹路径>"
     exit 1
 fi
+
 XHTML_DIR="$1"
+
 # 检查文件夹是否存在
 if [ ! -d "$XHTML_DIR" ]; then
     echo "错误: 文件夹 '$XHTML_DIR' 不存在"
     exit 1
 fi
+
 # 获取传入文件夹的父目录
 PARENT_DIR=$(dirname "$(realpath "$XHTML_DIR")")
 if [ -z "$PARENT_DIR" ]; then
     echo "错误: 无法获取文件夹的父目录"
     exit 1
 fi
-# 获取文件夹基名用于路径前缀
-FOLDER_NAME=$(basename "$XHTML_DIR")  # <-- 新增此行
 
-# 检查是否安装了xmlstarlet
+# 获取文件夹基名用于路径前缀
+FOLDER_NAME=$(basename "$XHTML_DIR")
+
+# 检查是否安装了 xmlstarlet
 if ! command -v xmlstarlet &> /dev/null; then
-    echo "错误: 未找到xmlstarlet，请先使用 'brew install xmlstarlet' 安装"
+    echo "错误: 未找到 xmlstarlet，请先使用 'brew install xmlstarlet' 安装"
     exit 1
 fi
-# 获取所有xhtml文件并按文件名排序
+
+# 获取所有 xhtml 文件并按文件名排序
 XHTML_FILES=$(find "$XHTML_DIR" -maxdepth 1 -type f -name "*.xhtml" | sort)
-# 检查是否有xhtml文件
+
+# 检查是否有 xhtml 文件
 if [ -z "$XHTML_FILES" ]; then
-    echo "错误: 在 '$XHTML_DIR' 中未找到任何xhtml文件"
+    echo "错误: 在 '$XHTML_DIR' 中未找到任何 xhtml 文件"
     exit 1
 fi
+
 # 初始化计数器
 volume_count=0
 chapter_count=0
 playorder=0
 current_volume_id=""
+
 # 用于存储当前卷的章节内容
 current_volume_chapters=$(mktemp)
+
 # 临时文件用于存储导航点数据
 navpoints=$(mktemp)
-# 处理每个xhtml文件
+
+# 处理每个 xhtml 文件
 while IFS= read -r file; do
-    # 提取文件名（用于href）
+    # 提取文件名（用于 href）
     filename=$(basename "$file")
     
-    # 使用xmlstarlet提取title内容
+    # 使用 xmlstarlet 提取 title 内容
     title=$(xmlstarlet sel -N xhtml="http://www.w3.org/1999/xhtml" \
               -t -v "/xhtml:html/xhtml:head/xhtml:title" "$file" 2>/dev/null)
     
@@ -55,11 +65,12 @@ while IFS= read -r file; do
         continue
     fi
     
-    # 增加playorder
+    # 增加 playorder
     playorder=$((playorder + 1))
     
-    # 判断是卷还是章，无法分辨的当作章节处理
-    if echo "$title" | grep -q "第.*卷"; then
+    # 判断是卷还是章，使用严格的匹配规则
+    # 要求"第"和"卷"之间不能有空格
+    if echo "$title" | grep -qP '^第[^ 章]+卷$'; then
         # 如果当前有未完成的卷，先关闭它
         if [ -n "$current_volume_id" ]; then
             # 写入当前卷的所有章节
@@ -70,43 +81,39 @@ while IFS= read -r file; do
             > "$current_volume_chapters"
         fi
         
-        # 处理新卷（分卷navPoint比navMap多缩进4空格）
+        # 处理新卷（分卷 navPoint 比 navMap 多缩进 4 空格）
         volume_count=$((volume_count + 1))
         volume_id=$(printf "volume_%03d" $volume_count)
         current_volume_id=$volume_id
         
-        # 卷开始标签：在navMap内缩进4空格（相对于ncx总缩进8空格）
+        # 卷开始标签：在 navMap 内缩进 4 空格（相对于 ncx 总缩进 8 空格）
         echo "        <navPoint id=\"$volume_id\" playOrder=\"$playorder\">" >> "$navpoints"
-        # 卷内元素：比卷多缩进4空格（共12空格）
+        # 卷内元素：比卷多缩进 4 空格（共 12 空格）
         echo "            <navLabel><text>$title</text></navLabel>" >> "$navpoints"
         # 修改路径：添加文件夹名前缀
-        echo "            <content src=\"$FOLDER_NAME/$filename\"/>" >> "$navpoints"  # <-- 修改此行
-        
-    elif echo "$title" | grep -q "第.*章"; then
+        echo "            <content src=\"$FOLDER_NAME/$filename\"/>" >> "$navpoints"
+    
+    # 要求"第"和"章"之间不能有空格
+    elif echo "$title" | grep -qP '^第[^ 卷]+章'; then
         # 处理章
         chapter_count=$((chapter_count + 1))
         chapter_id=$(printf "chapter_%03d" $chapter_count)
         
-        # 如果没有当前卷，创建一个默认卷
-        if [ -z "$current_volume_id" ]; then
-            volume_count=$((volume_count + 1))
-            current_volume_id=$(printf "volume_%03d" $volume_count)
-            # 默认卷开始标签：在navMap内缩进4空格
-            echo "        <navPoint id=\"$current_volume_id\" playOrder=\"$playorder\">" >> "$navpoints"
-            # 默认卷内元素：缩进12空格
-            echo "            <navLabel><text>默认卷</text></navLabel>" >> "$navpoints"
-            # 修改路径：添加文件夹名前缀
-            echo "            <content src=\"$FOLDER_NAME/$filename\"/>" >> "$navpoints"  # <-- 修改此行
-            playorder=$((playorder + 1))
+        # 如果有当前卷，章节属于卷
+        if [ -n "$current_volume_id" ]; then
+            # 章节标签：比卷多缩进 4 空格（共 12 空格）
+            echo "            <navPoint id=\"$chapter_id\" playOrder=\"$playorder\">" >> "$current_volume_chapters"
+            # 章节内元素：比章节多缩进 4 空格（共 16 空格）
+            echo "                <navLabel><text>$title</text></navLabel>" >> "$current_volume_chapters"
+            echo "                <content src=\"$FOLDER_NAME/$filename\"/>" >> "$current_volume_chapters"
+            echo "            </navPoint>" >> "$current_volume_chapters"
+        else
+            # 没有卷，章节直接作为 navMap 子节点（缩进 8 空格）
+            echo "        <navPoint id=\"$chapter_id\" playOrder=\"$playorder\">" >> "$navpoints"
+            echo "            <navLabel><text>$title</text></navLabel>" >> "$navpoints"
+            echo "            <content src=\"$FOLDER_NAME/$filename\"/>" >> "$navpoints"
+            echo "        </navPoint>" >> "$navpoints"
         fi
-        
-        # 章节标签：比卷多缩进4空格（共12空格）
-        echo "            <navPoint id=\"$chapter_id\" playOrder=\"$playorder\">" >> "$current_volume_chapters"
-        # 章节内元素：比章节多缩进4空格（共16空格）
-        echo "                <navLabel><text>$title</text></navLabel>" >> "$current_volume_chapters"
-        # 修改路径：添加文件夹名前缀
-        echo "                <content src=\"$FOLDER_NAME/$filename\"/>" >> "$current_volume_chapters"  # <-- 修改此行
-        echo "            </navPoint>" >> "$current_volume_chapters"
         
     else
         # 无法分辨的标题，当作章节处理
@@ -114,28 +121,24 @@ while IFS= read -r file; do
         chapter_count=$((chapter_count + 1))
         chapter_id=$(printf "chapter_%03d" $chapter_count)
         
-        # 如果没有当前卷，创建一个默认卷
-        if [ -z "$current_volume_id" ]; then
-            volume_count=$((volume_count + 1))
-            current_volume_id=$(printf "volume_%03d" $volume_count)
-            # 默认卷开始标签：在navMap内缩进4空格
-            echo "        <navPoint id=\"$current_volume_id\" playOrder=\"$playorder\">" >> "$navpoints"
-            # 默认卷内元素：缩进12空格
-            echo "            <navLabel><text>默认卷</text></navLabel>" >> "$navpoints"
-            # 修改路径：添加文件夹名前缀
-            echo "            <content src=\"$FOLDER_NAME/$filename\"/>" >> "$navpoints"  # <-- 修改此行
-            playorder=$((playorder + 1))
+        # 如果有当前卷，章节属于卷
+        if [ -n "$current_volume_id" ]; then
+            # 章节标签：比卷多缩进 4 空格（共 12 空格）
+            echo "            <navPoint id=\"$chapter_id\" playOrder=\"$playorder\">" >> "$current_volume_chapters"
+            # 章节内元素：比章节多缩进 4 空格（共 16 空格）
+            echo "                <navLabel><text>$title</text></navLabel>" >> "$current_volume_chapters"
+            echo "                <content src=\"$FOLDER_NAME/$filename\"/>" >> "$current_volume_chapters"
+            echo "            </navPoint>" >> "$current_volume_chapters"
+        else
+            # 没有卷，章节直接作为 navMap 子节点（缩进 8 空格）
+            echo "        <navPoint id=\"$chapter_id\" playOrder=\"$playorder\">" >> "$navpoints"
+            echo "            <navLabel><text>$title</text></navLabel>" >> "$navpoints"
+            echo "            <content src=\"$FOLDER_NAME/$filename\"/>" >> "$navpoints"
+            echo "        </navPoint>" >> "$navpoints"
         fi
-        
-        # 章节标签：比卷多缩进4空格（共12空格）
-        echo "            <navPoint id=\"$chapter_id\" playOrder=\"$playorder\">" >> "$current_volume_chapters"
-        # 章节内元素：比章节多缩进4空格（共16空格）
-        echo "                <navLabel><text>$title</text></navLabel>" >> "$current_volume_chapters"
-        # 修改路径：添加文件夹名前缀
-        echo "                <content src=\"$FOLDER_NAME/$filename\"/>" >> "$current_volume_chapters"  # <-- 修改此行
-        echo "            </navPoint>" >> "$current_volume_chapters"
     fi
 done <<< "$XHTML_FILES"
+
 # 处理最后一个未关闭的卷
 if [ -n "$current_volume_id" ]; then
     # 写入最后一卷的所有章节
@@ -143,9 +146,11 @@ if [ -n "$current_volume_id" ]; then
     # 关闭最后一卷（与开始标签同级缩进）
     echo "        </navPoint>" >> "$navpoints"
 fi
+
 # 清理章节临时文件
 rm "$current_volume_chapters"
-# 生成toc.ncx文件（确保ncx子节点缩进统一）
+
+# 生成 toc.ncx 文件（确保 ncx 子节点缩进统一）
 cat << EOF > "$PARENT_DIR/toc.ncx"
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <!DOCTYPE ncx PUBLIC "-//NISO//DTD ncx 2005-1//EN" "http://www.daisy.org/z3986/2005/ncx-2005-1.dtd">
@@ -164,8 +169,11 @@ $(cat "$navpoints")
     </navMap>
 </ncx>
 EOF
+
 # 清理临时文件
 rm "$navpoints"
+
+# 输出结果信息
 echo "已在 '$PARENT_DIR' 目录生成 toc.ncx 文件，包含:"
-echo " - $volume_count 个分卷"
+[ $volume_count -gt 0 ] && echo " - $volume_count 个分卷"
 echo " - $chapter_count 个章节"
