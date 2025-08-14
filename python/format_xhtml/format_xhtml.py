@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+
 """
 EPUB XHTML文件格式化工具（支持文件名排序处理）
 功能：
@@ -7,6 +7,8 @@ EPUB XHTML文件格式化工具（支持文件名排序处理）
 2. 标准化头部声明（XML + DOCTYPE）
 3. 修复自闭合标签并保持换行
 4. 4空格缩进格式化
+5. 将h2-span文本复制到title
+6. 清理head部分
 """
 import os
 import argparse
@@ -21,20 +23,29 @@ STANDARD_XML_DECLARATION = '<?xml version="1.0" encoding="UTF-8"?>'
 STANDARD_DOCTYPE = '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">'
 STANDARD_HTML_ATTRS = 'xmlns="http://www.w3.org/1999/xhtml" xml:lang="zh-Hans"'
 
+# XHTML命名空间
+XHTML_NS = "http://www.w3.org/1999/xhtml"
+
 def extract_declarations(content):
-    """分离XML声明和DOCTYPE声明"""
+    """分离XML声明和DOCTYPE声明（修复版）"""
     xml_declaration = ""
     doctype = ""
     body_start = 0
     
-    # 提取XML声明
-    if content.startswith('<?xml'):
-        end_decl = content.find('?>') + 2
-        xml_declaration = content[:end_decl].strip()
-        body_start = end_decl
+    # 查找第一个有效的XML声明位置（忽略前面的非法内容）
+    xml_match = re.search(r'<\?xml[^>]*\?>', content)
+    if xml_match:
+        # 移除声明前所有内容（包括非法标签）
+        body_start = xml_match.end()
+        xml_declaration = xml_match.group(0).strip()
     
-    # 提取DOCTYPE声明
-    doctype_match = re.search(r'<!DOCTYPE[^>]+>', content[body_start:], re.IGNORECASE)
+    # 在XML声明后查找DOCTYPE
+    if body_start > 0:
+        remaining = content[body_start:]
+    else:
+        remaining = content
+        
+    doctype_match = re.search(r'<!DOCTYPE[^>]+>', remaining, re.IGNORECASE)
     if doctype_match:
         doctype = doctype_match.group(0).strip()
         body_start += doctype_match.end()
@@ -96,8 +107,58 @@ def standardize_html_tag(content):
     
     return content.replace(html_match.group(0), new_html_tag)
 
+def clean_head_section(root):
+    """清理head部分，只保留title和stylesheet链接"""
+    # 查找head元素
+    head = root.find(f".//{{{XHTML_NS}}}head")
+    if head is None:
+        return
+    
+    # 保留的元素列表
+    elements_to_keep = []
+    
+    # 查找现有的title元素
+    title = head.find(f".//{{{XHTML_NS}}}title")
+    if title is not None:
+        elements_to_keep.append(title)
+    
+    # 查找所有样式表链接
+    for link in head.findall(f".//{{{XHTML_NS}}}link"):
+        rel_attr = link.get("rel", "").lower()
+        if "stylesheet" in rel_attr:
+            elements_to_keep.append(link)
+    
+    # 清空head并重新添加要保留的元素
+    head.clear()
+    for element in elements_to_keep:
+        head.append(element)
+
+def update_title_from_h2(root):
+    """将h2-span文本复制到title标签"""
+    # 查找head中的title元素
+    head = root.find(f".//{{{XHTML_NS}}}head")
+    if head is None:
+        return
+    
+    title = head.find(f".//{{{XHTML_NS}}}title")
+    if title is None:
+        title = etree.Element(f"{{{XHTML_NS}}}title")
+        head.insert(0, title)
+    
+    # 查找第一个h2元素
+    h2 = root.find(f".//{{{XHTML_NS}}}h2")
+    if h2 is None:
+        return
+    
+    # 查找h2中的第一个span
+    span = h2.find(f".//{{{XHTML_NS}}}span")
+    if span is not None and span.text:
+        title.text = span.text.strip()
+    elif h2.text:
+        title.text = h2.text.strip()
+
 def format_epub_xhtml_file(input_path, output_path, indent_size=4):
-    """格式化EPUB XHTML文件"""
+    """格式化EPUB XHTML文件（修复版）"""
     try:
         # 文本模式读取
         with open(input_path, 'r', encoding='utf-8') as f:
@@ -129,6 +190,12 @@ def format_epub_xhtml_file(input_path, output_path, indent_size=4):
         
         # 修复自闭合标签
         fix_self_closing_tags(root)
+        
+        # 清理head部分
+        clean_head_section(root)
+        
+        # 更新title内容
+        update_title_from_h2(root)
         
         # 应用缩进
         etree.indent(root, space=" " * indent_size)
@@ -178,20 +245,20 @@ if __name__ == "__main__":
     print(f"📂 输出目录: {output_dir}")
     errors = []
     
-    # === 核心修改：按文件名排序处理 ===
-    # 获取所有XHTML文件并按文件名排序（从小到大）
+    # 获取所有XHTML文件（保留原始扩展名）
     file_list = []
     for filename in os.listdir(source_dir):
         if filename.lower().endswith(('.xhtml', '.html', '.xml')):
             file_list.append(filename)
     
-    # 按文件名排序（字母顺序）
-    file_list.sort()
+    # 按文件名自然排序
+    file_list.sort(key=lambda f: [int(s) if s.isdigit() else s.lower() for s in re.split(r'(\d+)', f)])
     
-    print(f"📊 找到 {len(file_list)} 个XHTML文件，按文件名排序处理...")
+    print(f"📊 找到 {len(file_list)} 个文件，按文件名排序处理...")
     
     for filename in file_list:
         input_file = os.path.join(source_dir, filename)
+        # 保持原始文件扩展名
         output_file = os.path.join(output_dir, filename)
         
         success, error = format_epub_xhtml_file(input_file, output_file, args.indent)
