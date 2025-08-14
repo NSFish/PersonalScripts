@@ -41,9 +41,9 @@ cat > "$OPF_FILE" <<EOF
         <dc:subject></dc:subject>
         <dc:subject></dc:subject>
         <dc:date></dc:date>
-        <dc:language></dc:language>
-        <dc:format></dc:format>
-        <dc:type></dc:type>
+        <dc:language>zh-CN</dc:language>
+        <dc:format>application/epub+zip</dc:format>
+        <dc:type>novel</dc:type>
         <meta name="cover" content="cover"/>
     </metadata>
     <manifest>
