@@ -1,8 +1,26 @@
 #!/opt/homebrew/bin/bash
 
+# 初始化变量
+comic_mode=0
+
+# 解析选项
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -c|--comic)
+            comic_mode=1
+            shift
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
 # 检查输入
 if [ $# -ne 1 ]; then
-    echo "用法: $0 <输入文件.mobi/.epub 或 输入文件夹>"
+    echo "用法: $0 [-c|--comic] <输入文件.mobi/.epub 或 输入文件夹>"
+    echo "选项:"
+    echo "  -c, --comic   漫画模式 (仅打包图片内容)"
     exit 1
 fi
 
@@ -34,7 +52,7 @@ process_file() {
         # MOBI 处理流程
         local EPUB_OUTPUT="${TMP_DIR}/${FILENAME}.epub"
         
-        # 转换为 EPUB (隐藏正常输出, 仅在出错时显示)
+        # 转换为 EPUB
         echo "→ 转换为 EPUB..."
         if ! ebook-convert "$INPUT_FILE" "$EPUB_OUTPUT" > "$LOG_FILE" 2>&1; then
             echo "错误: EPUB 转换失败!"
@@ -73,6 +91,52 @@ process_file() {
         return 1
     fi
 
+    # 漫画模式处理: 仅打包图片文件夹
+    if [ $comic_mode -eq 1 ]; then
+        echo "→ 漫画模式启用 (仅打包图片内容)"
+        local IMAGE_DIR=""
+        
+        # 改进的图片目录查找逻辑
+        find_image_dir() {
+            local base_dir="$1"
+            
+            # 检查常见图片目录名称
+            for name in "image" "images"; do
+                if [ -d "${base_dir}/${name}" ]; then
+                    echo "${base_dir}/${name}"
+                    return 0
+                fi
+            done
+            
+            # 检查一级子目录中的图片目录
+            for sub_dir in "$base_dir"/*; do
+                if [ -d "$sub_dir" ]; then
+                    for name in "image" "images"; do
+                        if [ -d "${sub_dir}/${name}" ]; then
+                            echo "${sub_dir}/${name}"
+                            return 0
+                        fi
+                    done
+                fi
+            done
+            
+            return 1
+        }
+        
+        # 尝试查找图片目录
+        IMAGE_DIR=$(find_image_dir "$UNPACK_DIR")
+        
+        if [ -z "$IMAGE_DIR" ]; then
+            echo "错误: 无法找到图片目录 (image/images)"
+            rm -rf "$TMP_DIR"
+            return 1
+        else
+            echo "→ 找到图片目录: $(basename "$IMAGE_DIR")"
+            # 使用图片目录作为打包源
+            UNPACK_DIR="$IMAGE_DIR"
+        fi
+    fi
+
     # 打包为 ZIP
     local OUTPUT_ZIP="${OUTPUT_DIR}/${FILENAME}.zip"
     echo "→ 创建 ZIP 包: $(basename "$OUTPUT_ZIP")"
@@ -97,6 +161,9 @@ elif [ -d "$INPUT" ]; then
     mkdir -p "$OUTPUT_DIR"
     
     echo "处理文件夹: $INPUT"
+    if [ $comic_mode -eq 1 ]; then
+        echo "模式: 漫画 (仅打包图片内容)"
+    fi
     echo "输出目录: $OUTPUT_DIR"
     echo ""
     

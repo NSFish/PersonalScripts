@@ -5,10 +5,11 @@ EPUB XHTML文件格式化工具（支持文件名排序处理）
 功能：
 1. 按文件名顺序处理文件（从小到大）
 2. 标准化头部声明（XML + DOCTYPE）
-3. 修复自闭合标签并保持换行
-4. 4空格缩进格式化
-5. 将h2-span文本复制到title
+3. 修复自闭合标签并保持换行（特定条件下跳过）
+4. 4空格缩进格式化（特定条件下跳过）
+5. 将h2-span文本复制到title（特定条件下跳过）
 6. 清理head部分
+7. 特定卷/部/番外标题跳过body格式化和标题更新
 """
 import os
 import argparse
@@ -21,25 +22,40 @@ LINE_PRESERVING_TAGS = {"p", "div", "span", "a", "ul", "li", "h1", "h2", "h3", "
 # 标准头部声明
 STANDARD_XML_DECLARATION = '<?xml version="1.0" encoding="UTF-8"?>'
 STANDARD_DOCTYPE = '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">'
-STANDARD_HTML_ATTRS = 'xmlns="http://www.w3.org/1999/xhtml" xml:lang="zh-Hans"'
 
-# XHTML命名空间
-XHTML_NS = "http://www.w3.org/1999/xhtml"
+# 需要跳过body格式化的标题模式
+SKIP_TITLE_PATTERNS = [
+    r'^第[一二三四五六七八九十零百千万\d]+卷\s+.+',  # 第X卷 XXX
+    r'^第[一二三四五六七八九十零百千万\d]+部\s+.+',  # 第X部 XXX
+    r'^番外\s+.+',                      # 番外 XXX
+    r'^第[一二三四五六七八九十零百千万\d]+卷$',   # 仅"第X卷"
+    r'^第[一二三四五六七八九十零百千万\d]+部$',   # 仅"第X部"
+    r'^番外$'                          # 仅"番外"
+]
+
+def should_skip_body_formatting(title_text):
+    """检查标题是否符合跳过body格式化的条件"""
+    if not title_text:
+        return False
+    title_text = title_text.strip()
+    return any(re.match(pattern, title_text) for pattern in SKIP_TITLE_PATTERNS)
+
+def extract_title_from_raw_content(content):
+    """直接从原始内容中提取<title>标签内容"""
+    title_match = re.search(r'<title[^>]*>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
+    return title_match.group(1).strip() if title_match else None
 
 def extract_declarations(content):
-    """分离XML声明和DOCTYPE声明（修复版）"""
+    """分离XML声明和DOCTYPE声明"""
     xml_declaration = ""
     doctype = ""
     body_start = 0
     
-    # 查找第一个有效的XML声明位置（忽略前面的非法内容）
     xml_match = re.search(r'<\?xml[^>]*\?>', content)
     if xml_match:
-        # 移除声明前所有内容（包括非法标签）
         body_start = xml_match.end()
         xml_declaration = xml_match.group(0).strip()
     
-    # 在XML声明后查找DOCTYPE
     if body_start > 0:
         remaining = content[body_start:]
     else:
@@ -91,135 +107,151 @@ def standardize_html_tag(content):
     html_attrs = html_match.group(1)
     attrs_dict = {}
     
-    # 提取现有属性
     for attr_match in re.finditer(r'(\w+)\s*=\s*["\']([^"\']*)["\']', html_attrs):
         attrs_dict[attr_match.group(1).lower()] = attr_match.group(2)
     
-    # 确保必要属性存在
     if "xmlns" not in attrs_dict:
         attrs_dict["xmlns"] = "http://www.w3.org/1999/xhtml"
     if "xml:lang" not in attrs_dict:
         attrs_dict["xml:lang"] = "zh-Hans"
     
-    # 重建<html>标签
     new_attrs = ' '.join([f'{k}="{v}"' for k, v in attrs_dict.items()])
     new_html_tag = f'<html {new_attrs}>'
     
     return content.replace(html_match.group(0), new_html_tag)
 
-def clean_head_section(root):
+def clean_head_section(root, xhtml_ns):
     """清理head部分，只保留title和stylesheet链接"""
-    # 查找head元素
-    head = root.find(f".//{{{XHTML_NS}}}head")
+    head = root.find(f".//{{{xhtml_ns}}}head")
     if head is None:
         return
     
-    # 保留的元素列表
     elements_to_keep = []
     
-    # 查找现有的title元素
-    title = head.find(f".//{{{XHTML_NS}}}title")
+    title = head.find(f".//{{{xhtml_ns}}}title")
     if title is not None:
         elements_to_keep.append(title)
     
-    # 查找所有样式表链接
-    for link in head.findall(f".//{{{XHTML_NS}}}link"):
+    for link in head.findall(f".//{{{xhtml_ns}}}link"):
         rel_attr = link.get("rel", "").lower()
         if "stylesheet" in rel_attr:
             elements_to_keep.append(link)
     
-    # 清空head并重新添加要保留的元素
     head.clear()
     for element in elements_to_keep:
         head.append(element)
 
-def update_title_from_h2(root):
+def update_title_from_h2(root, xhtml_ns):
     """将h2-span文本复制到title标签"""
-    # 查找head中的title元素
-    head = root.find(f".//{{{XHTML_NS}}}head")
+    head = root.find(f".//{{{xhtml_ns}}}head")
     if head is None:
         return
     
-    title = head.find(f".//{{{XHTML_NS}}}title")
+    title = head.find(f".//{{{xhtml_ns}}}title")
     if title is None:
-        title = etree.Element(f"{{{XHTML_NS}}}title")
+        title = etree.Element(f"{{{xhtml_ns}}}title")
         head.insert(0, title)
     
-    # 查找第一个h2元素
-    h2 = root.find(f".//{{{XHTML_NS}}}h2")
+    h2 = root.find(f".//{{{xhtml_ns}}}h2")
     if h2 is None:
         return
     
-    # 查找h2中的第一个span
-    span = h2.find(f".//{{{XHTML_NS}}}span")
+    span = h2.find(f".//{{{xhtml_ns}}}span")
     if span is not None and span.text:
         title.text = span.text.strip()
     elif h2.text:
         title.text = h2.text.strip()
 
 def format_epub_xhtml_file(input_path, output_path, indent_size=4):
-    """格式化EPUB XHTML文件（修复版）"""
+    """格式化EPUB XHTML文件（精确控制版）"""
     try:
-        # 文本模式读取
+        # 读取原始内容
         with open(input_path, 'r', encoding='utf-8') as f:
             raw_content = f.read()
         
+        # 提取原始标题
+        raw_title = extract_title_from_raw_content(raw_content)
+        skip_body_processing = should_skip_body_formatting(raw_title) if raw_title else False
+        
+        if skip_body_processing:
+            print(f"⏩ 跳过body处理: {os.path.basename(input_path)} - '{raw_title}'")
+        
         # 标准化<html>标签属性
-        raw_content = standardize_html_tag(raw_content)
+        processed_content = standardize_html_tag(raw_content)
         
         # 分离声明与主体内容
-        xml_decl, doctype, body_content = extract_declarations(raw_content)
+        xml_decl, doctype, body_content = extract_declarations(processed_content)
         
         # 强制使用标准声明
         xml_decl = STANDARD_XML_DECLARATION
         doctype = STANDARD_DOCTYPE
         
-        # 处理自闭合标签
-        processed_body = format_self_closing_tags(body_content)
-        
-        # 解析XML主体
+        # ==== 关键修改：所有文件都解析文档 ====
+        # 使用不改变空白的解析器
         parser = etree.XMLParser(
-            remove_blank_text=True,
+            remove_blank_text=False,
             resolve_entities=False,
             recover=True
         )
         
-        # 将处理后的内容编码回UTF-8
-        processed_bytes = processed_body.encode('utf-8')
-        root = etree.fromstring(processed_bytes, parser)
+        # 创建包含完整文档的内容
+        full_body = f"<root>{body_content}</root>"  # 包裹根元素确保解析有效
+        root = etree.fromstring(full_body.encode('utf-8'), parser)
         
-        # 修复自闭合标签
-        fix_self_closing_tags(root)
+        # 获取实际使用的命名空间
+        namespaces = root[0].nsmap if len(root) > 0 else {}
+        xhtml_ns = namespaces.get(None, "http://www.w3.org/1999/xhtml")
         
-        # 清理head部分
-        clean_head_section(root)
+        # 获取真正的html根元素
+        html_root = root.find(f".//{{{xhtml_ns}}}html")
+        if html_root is None:
+            html_root = root.find(".//html") or root[0]
         
-        # 更新title内容
-        update_title_from_h2(root)
+        # ==== 清理head部分（所有文件都执行） ====
+        clean_head_section(html_root, xhtml_ns)
         
-        # 应用缩进
-        etree.indent(root, space=" " * indent_size)
+        # ==== 条件性更新标题 ====
+        if not skip_body_processing:
+            update_title_from_h2(html_root, xhtml_ns)
+        
+        # ==== 条件性body处理 ====
+        if not skip_body_processing:
+            # 处理自闭合标签
+            processed_body = format_self_closing_tags(body_content)
+            root = etree.fromstring(f"<root>{processed_body}</root>".encode('utf-8'), parser)
+            html_root = root.find(f".//{{{xhtml_ns}}}html") or root[0]
+            
+            # 修复自闭合标签
+            fix_self_closing_tags(html_root)
+            
+            # 应用缩进
+            etree.indent(html_root, space=" " * indent_size)
         
         # 序列化主体
-        formatted_body = etree.tostring(
-            root,
+        serialized_body = etree.tostring(
+            html_root,
             encoding="utf-8",
             xml_declaration=False,
-            pretty_print=True,
+            pretty_print=not skip_body_processing,
             method="xml"
         ).decode('utf-8')
         
+        # 移除包裹的根元素
+        if serialized_body.startswith('<root>'):
+            serialized_body = serialized_body[6:-7]
+        
         # 后处理：恢复单独成行的空标签
-        formatted_body = re.sub(
-            r'<(/?)(p|div|span|a|ul|li|h1|h2|h3|br)([^>]*)>\s*</\2>',
-            r'<\1\2\3></\2>', 
-            formatted_body
-        )
+        if not skip_body_processing:
+            serialized_body = re.sub(
+                r'<(/?)(p|div|span|a|ul|li|h1|h2|h3|br)([^>]*)>\s*</\2>',
+                r'<\1\2\3></\2>', 
+                serialized_body
+            )
         
         # 组合最终内容
-        full_content = f"{xml_decl}\n{doctype}\n{formatted_body}"
+        full_content = f"{xml_decl}\n{doctype}\n{serialized_body}"
         
-        # 文本模式写入
+        # 写入文件
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(full_content)
             
@@ -241,11 +273,11 @@ if __name__ == "__main__":
     output_dir = os.path.join(parent_dir, f"{base_name}_formatted")
     os.makedirs(output_dir, exist_ok=True)
     
-    print(f"🔍 扫描目录: {source_dir}")
-    print(f"📂 输出目录: {output_dir}")
+    print(f"🔍🔍 扫描目录: {source_dir}")
+    print(f"📂📂 输出目录: {output_dir}")
     errors = []
     
-    # 获取所有XHTML文件（保留原始扩展名）
+    # 获取所有XHTML文件
     file_list = []
     for filename in os.listdir(source_dir):
         if filename.lower().endswith(('.xhtml', '.html', '.xml')):
@@ -254,11 +286,10 @@ if __name__ == "__main__":
     # 按文件名自然排序
     file_list.sort(key=lambda f: [int(s) if s.isdigit() else s.lower() for s in re.split(r'(\d+)', f)])
     
-    print(f"📊 找到 {len(file_list)} 个文件，按文件名排序处理...")
+    print(f"📊📊 找到 {len(file_list)} 个文件，按文件名排序处理...")
     
     for filename in file_list:
         input_file = os.path.join(source_dir, filename)
-        # 保持原始文件扩展名
         output_file = os.path.join(output_dir, filename)
         
         success, error = format_epub_xhtml_file(input_file, output_file, args.indent)
@@ -266,9 +297,9 @@ if __name__ == "__main__":
         if success:
             print(f"✅ 成功: {filename}")
         else:
-            print(f"❌ 失败: {filename} - {error}")
+            print(f"❌❌ 失败: {filename} - {error}")
             errors.append(filename)
     
-    print(f"\n🎉 完成！处理文件: {len(file_list) - len(errors)}/{len(file_list)} 个")
+    print(f"\n🎉🎉 完成！处理文件: {len(file_list) - len(errors)}/{len(file_list)} 个")
     if errors:
         print(f"⚠️ 失败文件: {', '.join(errors)}")
