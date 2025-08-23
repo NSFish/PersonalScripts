@@ -47,9 +47,13 @@ def organize_manga(input_dir, dir_page, contents_path):
         print("错误: 未在contents.txt中找到有效的章节信息")
         return
     
-    # 获取并排序图片文件
+    # 添加排序：按照章节起始页码（元组第二个元素）升序排列
+    chapters.sort(key=lambda x: x[1])
+    
+    # 获取并排序图片文件（增加对AVIF格式的支持）
+    supported_formats = ('.jpg', '.jpeg', '.png', '.avif')
     all_files = sorted(
-        [f for f in os.listdir(input_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))],
+        [f for f in os.listdir(input_dir) if f.lower().endswith(supported_formats)],
         key=extract_number
     )
     
