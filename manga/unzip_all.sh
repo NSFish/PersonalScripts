@@ -68,5 +68,3 @@ find "$INPUT_DIR" -maxdepth 1 -type f \( -name "*.zip" -o -name "*.cbz" \) -prin
 done
 
 echo "处理完成！"
-echo "解压的图片文件夹位于: $INPUT_DIR"
-echo "原始压缩包保留在: $INPUT_DIR"
