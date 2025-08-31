@@ -11,7 +11,7 @@
 #   -h, --help     显示帮助文档
 #
 # 输出结构：
-#   <父目录的父目录>/ocr_output/
+#   <父目录的父目录>/<输入目录名>_ocr_result/
 #     ├── 子目录A/
 #     │   ├── 图片1.json
 #     │   └└── ...
@@ -32,14 +32,14 @@ NC='\033[0m' # 重置颜色
 # 帮助信息
 show_help() {
     echo "用法: $0 [选项] <父文件夹路径>"
-    echo "图片 OCR 处理器，输出目录为 <父目录的父目录>/ocr_output"
+    echo "图片 OCR 处理器，输出目录为 <父目录的父目录>/<输入目录名>_ocr_result"
     echo ""
     echo "选项:"
     echo "  -v, --verbose    显示详细处理信息"
     echo "  -h, --help       显示此帮助信息"
     echo ""
     echo "示例:"
-    echo "  $0 /path/to/parent"
+    echo "  $0 /path/to/parent  # 输出目录为 /path/to/parent_ocr_result"
 }
 
 # 检查依赖
@@ -126,11 +126,12 @@ main() {
     parse_args "$@"
     check_dependencies
 
-    # 设置输出目录
-    OUTPUT_BASE=$(dirname "$PARENT_DIR")
-    OUTPUT_DIR="$OUTPUT_BASE/ocr_output"
+    # 设置输出目录（使用输入目录名 + _ocr_result）
+    local parent_dir_name=$(basename "$PARENT_DIR")  # 获取输入目录的名称
+    OUTPUT_BASE=$(dirname "$PARENT_DIR")             # 获取输入目录的父目录
+    OUTPUT_DIR="$OUTPUT_BASE/${parent_dir_name}_ocr_result"  # 组合输出目录路径
     
-    # 创建输出目录
+    # 创建输出目录（若已存在则先删除）
     if [ -d "$OUTPUT_DIR" ]; then
         rm -rf "$OUTPUT_DIR"
     fi
