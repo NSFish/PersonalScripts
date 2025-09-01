@@ -6,11 +6,14 @@ dependencies = [
     "pillow>=11.3.0",
 ]
 
-[tool.setuptools]
-py-modules = ["double_page_crop", "page_blender", "page_concat", "split_volume_into_chapters"]
-
 [project.scripts]
 double-page-crop = "double_page_crop:main"
 page-blender = "page_blender:main"
 page-concat = "page_concat:main"
 split-volume-into-chapters = "split_volume_into_chapters:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages]
+find = { where = ["src"] }
