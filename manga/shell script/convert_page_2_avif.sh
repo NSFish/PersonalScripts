@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/opt/homebrew/bin/bash
 
 # 检查参数和依赖
 if [ $# -ne 1 ]; then
