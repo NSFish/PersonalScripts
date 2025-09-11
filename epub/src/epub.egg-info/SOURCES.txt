@@ -1,0 +1,7 @@
+pyproject.toml
+src/epub.egg-info/PKG-INFO
+src/epub.egg-info/SOURCES.txt
+src/epub.egg-info/dependency_links.txt
+src/epub.egg-info/entry_points.txt
+src/epub.egg-info/requires.txt
+src/epub.egg-info/top_level.txt
