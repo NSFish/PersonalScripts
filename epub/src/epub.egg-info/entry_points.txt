@@ -1,0 +1,3 @@
+[console_scripts]
+epub-to-zip = epub_2_zip:main
+format-xhtml = format_xhtml:main
