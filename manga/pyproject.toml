@@ -3,6 +3,7 @@ name = "manga"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
+    "lxml>=6.0.1",
     "pillow>=11.3.0",
 ]
 
@@ -10,7 +11,7 @@ dependencies = [
 double-page-crop = "double_page_crop:main"
 page-blender = "page_blender:main"
 page-concat = "page_concat:main"
-split-volume-into-chapters = "split_volume_into_chapters:main"
+volume-split-into-chapters = "volume_split_into_chapters:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
