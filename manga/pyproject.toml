@@ -5,6 +5,7 @@ requires-python = ">=3.13"
 dependencies = [
     "lxml>=6.0.1",
     "pillow>=11.3.0",
+    "pyobjc>=11.1",
 ]
 
 [project.scripts]
@@ -12,6 +13,7 @@ double-page-crop = "double_page_crop:main"
 page-blender = "page_blender:main"
 page-concat = "page_concat:main"
 volume-split-into-chapters = "volume_split_into_chapters:main"
+zip-rename-inside = "zip_rename_inside:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
