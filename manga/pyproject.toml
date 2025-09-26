@@ -13,7 +13,8 @@ double-page-crop = "double_page_crop:main"
 page-blender = "page_blender:main"
 page-concat = "page_concat:main"
 volume-split-into-chapters = "volume_split_into_chapters:main"
-zip-rename-inside = "zip_rename_inside:main"
+hentai-zip-rename-inside = "hentai_zip_rename_inside:main"
+convert-image-format-to = "convert_image_format_to:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
