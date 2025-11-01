@@ -58,7 +58,7 @@ parse_args() {
                 ;;
         esac
     done
-    
+
     if [[ -z "$FOLDER_PATH" ]]; then
         echo "错误：请指定文件夹路径" >&2
         show_help
@@ -92,28 +92,28 @@ convert_chinese_number() {
     local temp_digit=0
     local char
     local digit_val
-    
+
     # 处理纯阿拉伯数字的情况
     if [[ $chinese =~ ^[0-9]+$ ]]; then
         echo "$chinese"
         return 0
     fi
-    
+
     # 处理零的特殊情况
     if [[ "$chinese" == "$(printf "\\u96f6")" ]]; then
         echo "0"
         return 0
     fi
-    
+
     # 处理单位字符的Unicode码点
     local units="$(printf "\\u5341")|$(printf "\\u767e")|$(printf "\\u5343")|$(printf "\\u4e07")|$(printf "\\u4ebf")"
-    
+
     # 优化转换逻辑：先处理所有单位
     for unit in $(printf "\\u4ebf") $(printf "\\u4e07") $(printf "\\u5343") $(printf "\\u767e") $(printf "\\u5341"); do
         if [[ $chinese == *"$unit"* ]]; then
             local part="${chinese%%"$unit"*}"
             local remainder="${chinese#*"$unit"}"
-            
+
             if [[ -n "$part" ]]; then
                 local part_value=$(convert_chinese_number "$part")
                 result=$((result + part_value * ${chinese_numbers[$unit]}))
@@ -124,19 +124,19 @@ convert_chinese_number() {
             chinese="$remainder"
         fi
     done
-    
+
     # 处理剩余的数字
     for ((i=0; i<${#chinese}; i++)); do
         char="${chinese:$i:1}"
         digit_val="${chinese_numbers[$char]}"
-        
+
         if [[ -n "$digit_val" ]]; then
             temp_digit=$((temp_digit * 10 + digit_val))
         fi
     done
-    
+
     result=$((result + temp_digit))
-    
+
     if [[ $result -gt 0 ]]; then
         echo "$result"
         return 0
@@ -153,27 +153,60 @@ process_folder() {
     local new_name=""
     local is_processed=false
     local status=""
-    
-    # 优化正则表达式：支持更多中文数字格式
-    if [[ $folder_name =~ ^[第]?([^话章]+)[话章](.*)$ ]]; then
+
+    # 新增：支持"第X条"格式的匹配
+    if [[ $folder_name =~ ^([第])([^条]+)[条](.*)$ ]]; then
+        local prefix="${BASH_REMATCH[1]}"  # "第"
+        local chinese_num="${BASH_REMATCH[2]}"  # 中文数字部分
+        local rest_text="${BASH_REMATCH[3]}"  # 剩余文本
+
+        local arabic_num=$(convert_chinese_number "$chinese_num" 2>/dev/null)
+
+        if [[ $? -eq 0 ]]; then
+            # 处理剩余文本中的前缀空格和标点
+            rest_text=$(echo "$rest_text" | sed -e 's/^[[:space:]]*//' -e 's/^[[:punct:]]*//')
+
+            if [[ -z "$rest_text" ]]; then
+                new_name="${prefix} ${arabic_num} 条"
+            else
+                new_name="${prefix} ${arabic_num} 条 ${rest_text}"
+            fi
+
+            # 总是显示转换过程
+            echo "$folder_name -> $new_name"
+            is_processed=true
+
+            if [[ $DRY_RUN == true ]]; then
+                if [[ $VERBOSE == true ]]; then
+                    echo "  (预览) 重命名: $folder -> $(dirname "$folder")/$new_name" >&2
+                fi
+            else
+                mv -- "$folder" "$(dirname "$folder")/$new_name"
+            fi
+        else
+            # 显示转换失败信息
+            echo "$folder_name -> 转换失败 (无法识别的数字格式: $chinese_num)"
+        fi
+    # 原有逻辑：支持"第X章/X话"格式
+    elif [[ $folder_name =~ ^[第]?([^话章]+)[话章](.*)$ ]]; then
         local chinese_num="${BASH_REMATCH[1]}"
         local rest_text="${BASH_REMATCH[2]}"
         local arabic_num=$(convert_chinese_number "$chinese_num" 2>/dev/null)
-        
+
         if [[ $? -eq 0 ]]; then
             # 处理剩余文本中的前缀空格
             rest_text=$(echo "$rest_text" | sed -e 's/^[[:space:]]*//' -e 's/^[[:punct:]]*//')
-            
+
             if [[ -z "$rest_text" ]]; then
                 new_name="$arabic_num"
             else
                 new_name="$arabic_num $rest_text"
             fi
-            
+
             # 总是显示转换过程
             echo "$folder_name -> $new_name"
             is_processed=true
-            
+
             if [[ $DRY_RUN == true ]]; then
                 if [[ $VERBOSE == true ]]; then
                     echo "  (预览) 重命名: $folder -> $(dirname "$folder")/$new_name" >&2
@@ -199,12 +232,12 @@ process_folder() {
 main() {
     check_bash_version
     parse_args "$@"
-    
+
     echo "开始处理文件夹: $FOLDER_PATH" >&2
     local mode_text=$(if [[ $DRY_RUN == true ]]; then echo "预览模式"; else echo "执行模式"; fi)
     echo "操作模式: $mode_text" >&2
     echo ""
-    
+
     # 递归处理所有子文件夹
     find "$FOLDER_PATH" -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r -d $'\0' folder; do
         process_folder "$folder"
