@@ -3,6 +3,7 @@ name = "manga"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
+    "cn2an>=0.5.23",
     "lxml>=6.0.1",
     "pillow>=11.3.0",
     "pyobjc>=11.1",
@@ -15,6 +16,7 @@ page-concat = "page_concat:main"
 volume-split-into-chapters = "volume_split_into_chapters:main"
 hentai-zip-rename-inside = "hentai_zip_rename_inside:main"
 convert-image-format-to = "convert_image_format_to:main"
+convert-cn-numbers-to-arab = "convert_cn_numbers_to_arab:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
