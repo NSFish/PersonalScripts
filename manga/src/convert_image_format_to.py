@@ -1,7 +1,12 @@
 import os
+import re
 import shutil
 import subprocess
 import sys
+
+def natural_sort_key(s):
+    """生成自然排序的key，处理文件名中的数字"""
+    return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', s)]
 
 def convert_images(input_folder, out_format):
     # 获取输出文件夹路径
@@ -17,8 +22,12 @@ def convert_images(input_folder, out_format):
     # 支持的图片格式
     exts = ('.webp', '.avif', '.png', '.jpeg', '.jpg')
 
-    # 遍历输入文件夹
-    for filename in os.listdir(input_folder):
+    # 获取文件夹内所有文件并按文件名自然升序排序
+    file_list = os.listdir(input_folder)
+    file_list.sort(key=natural_sort_key)  # 按自然排序（兼容数字）从小到大
+
+    # 遍历排序后的文件列表
+    for filename in file_list:
         if filename.lower().endswith(exts):
             input_path = os.path.join(input_folder, filename)
             name, _ = os.path.splitext(filename)
@@ -28,17 +37,21 @@ def convert_images(input_folder, out_format):
             try:
                 subprocess.run([
                     "magick", input_path, "-strip", output_path
-                ], check=True)
+                ], check=True, capture_output=True, text=True)
                 print(f"✅ 转换成功: {input_path} -> {output_path}")
             except subprocess.CalledProcessError as e:
-                print(f"❌ 转换失败: {filename}，错误: {e}")
+                print(f"❌ 转换失败: {filename}，错误: {e.stderr}")
 
 def main():
     if len(sys.argv) != 3:
-        print("用法: python convert_image_format_to_jpg.py <输出图片格式> <图片文件夹路径>")
+        print("用法: python convert_image_format_to.py <输出图片格式> <图片文件夹路径>")
         sys.exit(1)
     out_format = sys.argv[1].lower()
     input_folder = sys.argv[2]
+    # 检查输入文件夹是否存在
+    if not os.path.isdir(input_folder):
+        print(f"❌ 错误：输入文件夹 '{input_folder}' 不存在或不是有效文件夹")
+        sys.exit(1)
     convert_images(input_folder, out_format)
 
 if __name__ == "__main__":
