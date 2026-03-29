@@ -18,6 +18,7 @@ hentai-zip-rename-inside = "hentai_zip_rename_inside:main"
 convert-image-format-to = "convert_image_format_to:main"
 convert-cn-numbers-to-arab = "convert_cn_numbers_to_arab:main"
 insert-numbers-in-front-of-chapter-titles = "insert_numbers_in_front_of_chapter_titles:main"
+batch-convert-image-format-inside-zip-to-avif = "batch_convert_image_format_inside_zip_to_avif:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
