@@ -86,59 +86,54 @@ declare -A chinese_numbers=(
 )
 
 # 中文数字转换函数
+# 支持：零〇一二三...九、十百千万亿，以及复合数（如 二十三、一百零五、三万二千）
 convert_chinese_number() {
     local chinese="$1"
-    local result=0
-    local temp_digit=0
-    local char
-    local digit_val
 
-    # 处理纯阿拉伯数字的情况
-    if [[ $chinese =~ ^[0-9]+$ ]]; then
+    # 纯阿拉伯数字直接返回
+    if [[ "$chinese" =~ ^[0-9]+$ ]]; then
         echo "$chinese"
         return 0
     fi
 
-    # 处理零的特殊情况
-    if [[ "$chinese" == "$(printf "\\u96f6")" ]]; then
-        echo "0"
-        return 0
-    fi
+    local -i total=0 section=0 current=0
+    local len=${#chinese} i char dval unit part
 
-    # 处理单位字符的Unicode码点
-    local units="$(printf "\\u5341")|$(printf "\\u767e")|$(printf "\\u5343")|$(printf "\\u4e07")|$(printf "\\u4ebf")"
-
-    # 优化转换逻辑：先处理所有单位
-    for unit in $(printf "\\u4ebf") $(printf "\\u4e07") $(printf "\\u5343") $(printf "\\u767e") $(printf "\\u5341"); do
-        if [[ $chinese == *"$unit"* ]]; then
-            local part="${chinese%%"$unit"*}"
-            local remainder="${chinese#*"$unit"}"
-
-            if [[ -n "$part" ]]; then
-                local part_value=$(convert_chinese_number "$part")
-                result=$((result + part_value * ${chinese_numbers[$unit]}))
-            else
-                # 处理"十"这样的单位单独出现的情况
-                result=$((result + ${chinese_numbers[$unit]}))
-            fi
-            chinese="$remainder"
-        fi
-    done
-
-    # 处理剩余的数字
-    for ((i=0; i<${#chinese}; i++)); do
+    for ((i=0; i<len; i++)); do
         char="${chinese:$i:1}"
-        digit_val="${chinese_numbers[$char]}"
-
-        if [[ -n "$digit_val" ]]; then
-            temp_digit=$((temp_digit * 10 + digit_val))
+        dval=""
+        case "$char" in
+            一) dval=1 ;; 二) dval=2 ;; 三) dval=3 ;; 四) dval=4 ;;
+            五) dval=5 ;; 六) dval=6 ;; 七) dval=7 ;; 八) dval=8 ;;
+            九) dval=9 ;; 零|〇) dval=0 ;;
+        esac
+        if [[ -n "$dval" ]]; then
+            current=$dval
+            continue
+        fi
+        case "$char" in
+            十) unit=10 ;; 百) unit=100 ;; 千) unit=1000 ;;
+            万) unit=10000 ;; 亿) unit=100000000 ;;
+            *) unit=0 ;;
+        esac
+        if [[ $unit -gt 0 ]]; then
+            if [[ $unit -ge 10000 ]]; then
+                part=$((section + current))
+                [[ $part -eq 0 ]] && part=1
+                total=$(( total + part * unit ))
+                section=0
+                current=0
+            else
+                [[ $current -eq 0 ]] && current=1
+                section=$(( section + current * unit ))
+                current=0
+            fi
         fi
     done
+    total=$(( total + section + current ))
 
-    result=$((result + temp_digit))
-
-    if [[ $result -gt 0 ]]; then
-        echo "$result"
+    if [[ $total -gt 0 ]]; then
+        echo "$total"
         return 0
     else
         echo "错误：无法识别数字格式" >&2

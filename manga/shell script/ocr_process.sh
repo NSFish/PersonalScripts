@@ -23,6 +23,11 @@ VERBOSE=false
 REC_LANGS="zh-Hans,zh-Hant,en-US"
 OUTPUT_DIR=""
 
+# 解析脚本所在目录，定位仓库根目录下的 macos-vision-ocr-arm64
+# （脚本位于 <仓库>/manga/shell script/，二进制位于 <仓库>/macos-vision-ocr-arm64）
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+OCR_BIN="$SCRIPT_DIR/../../macos-vision-ocr-arm64"
+
 # ANSI 颜色代码
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
@@ -44,9 +49,9 @@ show_help() {
 
 # 检查依赖
 check_dependencies() {
-    ! command -v macos-vision-ocr-arm64 &>/dev/null && {
+    [ ! -x "$OCR_BIN" ] && {
         echo -e "${RED}错误: 未找到 macos-vision-ocr-arm64${NC}"
-        echo "请确保 OCR 工具已正确安装"
+        echo "请确保仓库根目录下存在该二进制（当前查找路径: $OCR_BIN）"
         exit 1
     }
 
@@ -56,7 +61,7 @@ check_dependencies() {
         exit 1
     }
 
-    if ! macos-vision-ocr-arm64 --help 2>&1 | grep -q "\--img-dir"; then
+    if ! "$OCR_BIN" --help 2>&1 | grep -q "\--img-dir"; then
         echo -e "${RED}错误: OCR 工具不支持批量模式 (缺少 --img-dir 参数)${NC}"
         exit 1
     fi
@@ -99,7 +104,7 @@ process_subdir() {
 
     # 临时保存错误输出
     local ocr_errors=""
-    ocr_errors=$(macos-vision-ocr-arm64 --img-dir "$sub_dir" --output-dir "$sub_output_dir" --rec-langs "$REC_LANGS" 2>&1 >/dev/null)
+    ocr_errors=$("$OCR_BIN" --img-dir "$sub_dir" --output-dir "$sub_output_dir" --rec-langs "$REC_LANGS" 2>&1 >/dev/null)
 
     # 检查 OCR 是否成功
     if [ $? -ne 0 ]; then

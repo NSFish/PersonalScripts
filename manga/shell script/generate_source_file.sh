@@ -66,22 +66,24 @@ for file in "${files[@]}"; do
     shopt -u extglob
 
     # 特别处理：在数字和汉字之间添加空格
+    # 说明：bash 的 =~ 不支持 \p{Han}，改用 Unicode 码点区间判断（CJK 统一表意文字 0x4E00-0x9FFF）
+    is_han() { local c; c=$(printf '%d' "'${1}"); [ "$c" -ge 19968 ] && [ "$c" -le 40869 ]; }
     processed_rest=""
     prev_char=""
-    
+
     for (( i=0; i<${#rest}; i++ )); do
         char="${rest:$i:1}"
-        
+
         # 当前字符是汉字且前一个字符是数字
-        if [[ "$char" =~ [\p{Han}] && "$prev_char" =~ [0-9] ]]; then
+        if is_han "$char" && [[ "$prev_char" =~ [0-9] ]]; then
             processed_rest+=" $char"
         # 当前字符是数字且前一个字符是汉字
-        elif [[ "$char" =~ [0-9] && "$prev_char" =~ [\p{Han}] ]]; then
+        elif [[ "$char" =~ [0-9] ]] && is_han "$prev_char"; then
             processed_rest+=" $char"
         else
             processed_rest+="$char"
         fi
-        
+
         prev_char="$char"
     done
     
