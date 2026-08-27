@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# 机器相关的命令包装器（写死绝对路径，不入库）
+/bin/
