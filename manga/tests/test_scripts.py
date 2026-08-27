@@ -215,6 +215,15 @@ def test_insert_numbers_idempotent(tmp_path: Path):
     ]
 
 
+def test_insert_numbers_conflict_skips(tmp_path: Path):
+    d = tmp_path / "p"
+    (d / "第3话 xxx").mkdir(parents=True)
+    (d / "0 第3话 xxx").mkdir(parents=True)  # 已存在将要生成的目标名
+
+    run_ok("insert_numbers_in_front_of_chapter_titles.py", str(d))
+    assert sorted(p.name for p in d.iterdir()) == ["0 第3话 xxx", "第3话 xxx"]
+
+
 def test_pages_organize(tmp_path: Path):
     d = tmp_path / "p"
     d.mkdir()
@@ -222,6 +231,19 @@ def test_pages_organize(tmp_path: Path):
 
     run_ok("pages_organize_into_chapters.py", str(d))
     assert (d / "12" / "abc_12_34.jpg").is_file()
+
+
+def test_pages_organize_conflict_skips(tmp_path: Path):
+    d = tmp_path / "p"
+    d.mkdir()
+    make_img(d / "abc_12_34.jpg")
+    dest = d / "12"
+    dest.mkdir()
+    (dest / "abc_12_34.jpg").write_bytes(b"old")
+
+    run_ok("pages_organize_into_chapters.py", str(d))
+    assert (d / "abc_12_34.jpg").is_file()                    # 原文件未被移动
+    assert (dest / "abc_12_34.jpg").read_bytes() == b"old"    # 未被覆盖
 
 
 def test_check_page_width_all_match(tmp_path: Path):
@@ -257,6 +279,29 @@ def test_unzip_all(tmp_path: Path):
 
     run_ok("unzip_all.py", str(d))
     assert (d / "book" / "img1.jpg").is_file()
+
+
+def test_unzip_all_duplicate_names_skipped(tmp_path: Path):
+    d = tmp_path / "p"
+    d.mkdir()
+    zip_path = d / "book.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("a/img1.jpg", b"first")
+        zf.writestr("b/img1.jpg", b"second")  # 拍平后与前者同名
+
+    run_ok("unzip_all.py", str(d))
+    target = d / "book"
+    assert [p.name for p in target.iterdir()] == ["img1.jpg"]
+    assert (target / "img1.jpg").read_bytes() == b"first"  # 先到先得，后者跳过
+
+
+def test_unzip_all_bad_zip_continues(tmp_path: Path):
+    d = tmp_path / "p"
+    d.mkdir()
+    (d / "book.zip").write_bytes(b"not a zip")
+
+    run_ok("unzip_all.py", str(d))  # 坏 zip 报错跳过，不应崩溃
+    assert not (d / "book").exists()
 
 
 def test_zip_all(tmp_path: Path):
@@ -362,6 +407,21 @@ def test_hentai_zip_rename_inside_ignores_stale_tmp_zip(tmp_path: Path):
     assert stale.read_bytes() == b"garbage"  # 原样保留，未被改动
 
 
+def test_hentai_zip_rename_inside_excludes_hidden(tmp_path: Path):
+    d = tmp_path / "p"
+    d.mkdir()
+    zip_path = d / "mycomic.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("oldname/a.txt", "hello")
+        zf.writestr("oldname/.DS_Store", "junk")
+        zf.writestr("__MACOSX/oldname/._junk", "junk")  # mac zip 常见附带物
+
+    run_ok("hentai_zip_rename_inside.py", str(d))
+    with zipfile.ZipFile(zip_path) as zf:
+        # 隐藏文件被排除；__MACOSX 不干扰"解压出单个文件夹"的判定，重命名正常发生
+        assert zf.namelist() == ["mycomic/a.txt"]
+
+
 def test_keywords_searching(tmp_path: Path):
     parent = tmp_path / "imgs"
     sub = parent / "sub"
@@ -410,6 +470,11 @@ def test_jpeg_2_jpg(tmp_path: Path):
     assert (d / "a.jpg").is_file()
     assert (d / "sub" / "b.jpg").is_file()
     assert (d / "keep.txt").is_file()  # 非 jpeg 不受影响
+
+
+def test_jpeg_2_jpg_missing_dir_exits_nonzero(tmp_path: Path):
+    r = run("jpeg_2_jpg.py", str(tmp_path / "nope"))
+    assert r.returncode == 1
 
 
 def test_jpeg_2_jpg_skip_when_target_exists(tmp_path: Path):

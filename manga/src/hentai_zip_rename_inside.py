@@ -43,8 +43,11 @@ def main():
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
             zip_ref.extractall(extract_dir)
 
-        # 检查解压出来的文件夹名
-        extracted_items = os.listdir(extract_dir)
+        # 检查解压出来的文件夹名（忽略 __MACOSX 与隐藏文件，mac 生成的 zip 常带这些）
+        extracted_items = [
+            i for i in os.listdir(extract_dir)
+            if i != "__MACOSX" and not i.startswith(".")
+        ]
         # 只考虑解压出来只有一个文件夹的情况
         if len(extracted_items) == 1 and os.path.isdir(os.path.join(extract_dir, extracted_items[0])):
             inner_folder = extracted_items[0]

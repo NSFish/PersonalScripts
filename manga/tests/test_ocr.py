@@ -26,6 +26,15 @@ def _make_text_image(path: Path, text: str) -> None:
     img.save(path)
 
 
+def _run_ocr(parent: Path) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, str(Path(__file__).parent.parent / "src" / "ocr_process.py"), str(parent)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+
+
 def test_ocr_process_writes_texts_json(tmp_path: Path):
     if not Path(FONT).exists():
         pytest.skip("缺少系统字体，跳过 OCR 测试")
@@ -35,15 +44,26 @@ def test_ocr_process_writes_texts_json(tmp_path: Path):
     sub.mkdir(parents=True)
     _make_text_image(sub / "a.jpg", "OCR Test 42")
 
-    r = subprocess.run(
-        [sys.executable, str(Path(__file__).parent.parent / "src" / "ocr_process.py"), str(parent)],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-    )
+    r = _run_ocr(parent)
     assert r.returncode == 0, r.stderr
 
     out = parent.parent / "imgs_ocr_result" / "sub" / "a.jpg.json"
     assert out.is_file()
     data = json.loads(out.read_text(encoding="utf-8"))
     assert "OCR" in data["texts"] and "42" in data["texts"]
+
+
+def test_ocr_process_logs_unreadable_image(tmp_path: Path):
+    parent = tmp_path / "imgs"
+    sub = parent / "sub"
+    sub.mkdir(parents=True)
+    (sub / "bad.jpg").write_bytes(b"not a real image")  # 扩展名合法但无法解码
+
+    r = _run_ocr(parent)
+    assert r.returncode == 0, r.stderr  # 坏图不终止整体流程
+
+    out_sub = parent.parent / "imgs_ocr_result" / "sub"
+    err_log = out_sub / "ocr_errors.log"
+    assert err_log.is_file(), "坏图应记入 ocr_errors.log"
+    assert "bad.jpg" in err_log.read_text(encoding="utf-8")
+    assert not (out_sub / "bad.jpg.json").exists()  # 失败的图片不产出 json

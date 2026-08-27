@@ -1,6 +1,8 @@
 """_common 公共函数的单元测试。"""
 from pathlib import Path
 
+import pytest
+
 from _common import cn_to_arab, is_image_file, natural_key, pad
 
 
@@ -40,3 +42,16 @@ def test_cn_to_arab():
     assert cn_to_arab("23") == 23
     assert cn_to_arab("xyz") is None
     assert cn_to_arab("") is None
+
+
+def test_mac_tags_round_trip(tmp_path):
+    pytest.importorskip("Foundation")  # macOS 专属
+    from _common import get_mac_tags, set_mac_tags
+
+    f = tmp_path / "a.zip"
+    f.write_bytes(b"x")
+    assert get_mac_tags(f) == []
+    assert set_mac_tags(f, ["Red"]) is True
+    assert get_mac_tags(f) == ["Red"]
+    assert set_mac_tags(f, []) is True   # 空列表应清除标签
+    assert get_mac_tags(f) == []
