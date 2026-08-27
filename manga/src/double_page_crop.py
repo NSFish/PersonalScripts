@@ -4,13 +4,15 @@ import argparse
 import shutil
 from PIL import Image
 
+RATIO_THRESHOLD = 1.4  # 宽/高 超过该比例才视为双页，避免误切单张宽图/封面
+
+
 def is_double_page(image_path):
-    """判断图片是否为双页：只要宽度大于高度就判定为双页"""
+    """判断图片是否为双页：宽高比明显大于 1 才判定为双页"""
     try:
         with Image.open(image_path) as img:
             width, height = img.size
-            # 宽度大于高度即视为双页
-            return width > height
+            return width / height >= RATIO_THRESHOLD
     except Exception as e:
         print(f"分析图片 {image_path} 时出错: {e}")
         return False
@@ -57,7 +59,7 @@ def process_directory(input_dir):
     os.makedirs(output_dir, exist_ok=True)
 
     # 支持的图片格式
-    supported_formats = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff')
+    supported_formats = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.avif')
 
     # 遍历目录中的所有文件
     for filename in os.listdir(input_dir):
@@ -65,6 +67,9 @@ def process_directory(input_dir):
 
         # 只处理文件和支持的图片格式
         if os.path.isfile(file_path) and filename.lower().endswith(supported_formats):
+            stem, _ = os.path.splitext(filename)
+            if stem.endswith('_01') or stem.endswith('_02'):
+                continue  # 跳过已拆分产生的子页，避免重复拆分
             # 判断是否为双页
             if is_double_page(file_path):
                 split_double_page(file_path, output_dir)

@@ -35,11 +35,10 @@ def parse_contents_file(contents_path):
 
     return chapters
 
-def extract_number(filename):
-    """按文件名中的数字排序（支持多数字场景）"""
+def natural_key(filename):
+    """自然排序 key：数字按数值比较，如 2 < 10"""
     base = os.path.splitext(filename)[0]
-    numbers = re.findall(r'\d+', base)
-    return int(numbers[-1]) if numbers else 0
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', base)]
 
 def organize_manga(input_dir, dir_page, contents_path):
     # 解析章节信息
@@ -52,10 +51,10 @@ def organize_manga(input_dir, dir_page, contents_path):
     chapters.sort(key=lambda x: x[1])
 
     # 获取并排序图片文件（增加对AVIF格式的支持）
-    supported_formats = ('.jpg', '.jpeg', '.png', '.avif')
+    supported_formats = ('.jpg', '.jpeg', '.png', '.avif', '.webp', '.gif', '.bmp', '.tiff')
     all_files = sorted(
         [f for f in os.listdir(input_dir) if f.lower().endswith(supported_formats)],
-        key=extract_number
+        key=natural_key
     )
 
     # 定位目录页

@@ -52,9 +52,12 @@ def main():
                 # 如果不是只有一个文件夹，直接用解压目录
                 new_inner_folder_path = extract_dir
 
-            # 重新压缩为原文件名
+            # 重新压缩为原文件名（保留与 zip 同名的顶层文件夹）
             new_zip_path = os.path.join(folder, filename)
-            shutil.make_archive(os.path.splitext(new_zip_path)[0], 'zip', new_inner_folder_path)
+            stage_path = os.path.join(folder, zip_name + '.tmp.zip')
+            base_dir = zip_name if new_inner_folder_path != extract_dir else None
+            shutil.make_archive(os.path.splitext(stage_path)[0], 'zip', extract_dir, base_dir)
+            os.replace(stage_path, new_zip_path)
 
             # 给新压缩包写入标签
             set_zip_tag(new_zip_path, tags)

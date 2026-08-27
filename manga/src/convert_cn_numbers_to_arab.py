@@ -25,7 +25,7 @@ def main():
 
     # 存储需要处理的文件夹信息: (原名称, 中文数字, 转换后的阿拉伯数字)
     folder_data = []
-    # 匹配"第XXX条"或"第XXX话"中的中文数字部分[1,2](@ref)
+    # 匹配"第XXX条"或"第XXX话"中的中文数字部分
     chinese_num_pattern = re.compile(r'第(.*?)[条话]')
     # 匹配已存在序号的文件夹（如"07 第七条：XX"）
     existing_seq_pattern = re.compile(r'^\d+\s')
@@ -43,7 +43,8 @@ def main():
 
         chinese_num = match.group(1)  # 提取中文数字（如"二十九"或"六十"）
         try:
-            arabic_num = cn2an.cn2an(chinese_num, "normal")  # 中文数字转阿拉伯数字[1](@ref)
+            # 纯阿拉伯数字直接转 int，否则用 cn2an 处理中文数字
+            arabic_num = int(chinese_num) if chinese_num.isdigit() else cn2an.cn2an(chinese_num, "normal")
             folder_data.append((foldername, chinese_num, arabic_num))
         except Exception as e:
             print(f"警告: 转换文件夹 '{foldername}' 的数字时出错: {e}")
