@@ -33,10 +33,12 @@ def convert_images(input_folder, out_format):
             name, _ = os.path.splitext(filename)
             output_path = os.path.join(output_folder, f"{name}.{out_format}")
 
-            # 使用imagemagick的magick命令进行转换，并去除 profile 和 metadata
+            # 使用 primage 转换格式（-q 90 保证高质量；primage 重新编码，默认不带原图元数据）
+            # primage 的 -f 接受 jpeg/png/webp/avif，需把 jpg 映射为 jpeg
+            primage_fmt = "jpeg" if out_format in ("jpg", "jpeg") else out_format
             try:
                 subprocess.run([
-                    "magick", input_path, "-strip", output_path
+                    "primage", "-f", primage_fmt, "-q", "90", "-o", output_path, input_path
                 ], check=True, capture_output=True, text=True)
                 print(f"✅ 转换成功: {input_path} -> {output_path}")
             except subprocess.CalledProcessError as e:

@@ -3,7 +3,7 @@ set -euo pipefail  # 开启严格模式，捕获未定义变量/命令失败/管
 
 # ===================== 配置与常量定义 =====================
 SCRIPT_NAME=$(basename "$0")
-MAGICK_CMD="magick"
+CONVERT_CMD="primage"
 BREW_INSTALL_URL="https://brew.sh/"
 DEFAULT_EXT="jpg"  # 默认转换格式
 
@@ -22,13 +22,13 @@ print_usage() {
     echo "  4. 若原图扩展名与目标扩展名一致（忽略大小写），则不执行任何操作"
 }
 
-# 检查 ImageMagick 是否安装
-check_imagemagick() {
-    if ! command -v "$MAGICK_CMD" &> /dev/null; then
-        echo "错误: 未检测到 ImageMagick (magick 命令)，请先安装！"
+# 检查 primage 是否安装
+check_converter() {
+    if ! command -v "$CONVERT_CMD" &> /dev/null; then
+        echo "错误: 未检测到 primage 命令，请先安装！"
         echo "macOS 下可通过 Homebrew 安装："
         echo "  1. 若未安装 Homebrew，请先执行：/bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
-        echo "  2. 安装 ImageMagick：brew install imagemagick"
+        echo "  2. 安装 primage：brew install primage"
         exit 1
     fi
 }
@@ -109,9 +109,11 @@ convert_image() {
         fi
     fi
 
-    # 执行转换命令
+    # 执行转换命令（primage: -f 用 jpeg/png/webp/avif，jpg 需映射为 jpeg；-q 90 保证高质量）
+    local primage_fmt="$target_ext"
+    if [[ "$target_ext" == "jpg" ]]; then primage_fmt="jpeg"; fi
     echo "正在转换: $original_path → $new_path"
-    if "$MAGICK_CMD" "$original_path" "$new_path"; then
+    if "$CONVERT_CMD" -f "$primage_fmt" -q 90 -o "$new_path" "$original_path"; then
         echo "✅ 转换成功！生成文件：$new_path"
     else
         echo "❌ 转换失败！"
@@ -125,7 +127,7 @@ main() {
     validate_params "$@"
     
     # 2. 检查 ImageMagick 依赖
-    check_imagemagick
+    check_converter
     
     # 3. 执行转换
     convert_image "$1" "$target_ext"

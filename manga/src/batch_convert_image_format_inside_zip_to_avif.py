@@ -28,10 +28,10 @@ def set_zip_tag(zip_path, tags):
         print(f"⚠️ 标签写入失败: {zip_path}")
 
 def convert_to_avif(input_path, output_path):
-    """调用ImageMagick转换图片为AVIF"""
+    """调用 primage 将图片转换为 AVIF（-q 90 保证高质量）"""
     try:
         subprocess.run(
-            ['magick', input_path, output_path],
+            ['primage', '-f', 'avif', '-q', '90', '-o', output_path, input_path],
             check=True,
             capture_output=True,
             text=True
