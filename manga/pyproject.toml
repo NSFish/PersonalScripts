@@ -7,6 +7,8 @@ dependencies = [
     "lxml>=6.1.0",
     "pillow>=12.3.0",
     "pyobjc>=11.1",
+    "pyobjc-framework-Vision>=11.1",
+    "pyobjc-framework-Quartz>=11.1",
     "pytest>=8.0",
 ]
 

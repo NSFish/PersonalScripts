@@ -1,3 +1,2 @@
 ffprobe filter=lfs diff=lfs merge=lfs -text
 ffmpeg filter=lfs diff=lfs merge=lfs -text
-macos-vision-ocr-arm64 filter=lfs diff=lfs merge=lfs -text

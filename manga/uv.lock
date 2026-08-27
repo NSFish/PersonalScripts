@@ -133,6 +133,8 @@ dependencies = [
     { name = "lxml" },
     { name = "pillow" },
     { name = "pyobjc" },
+    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-framework-vision" },
     { name = "pytest" },
 ]
 
@@ -142,6 +144,8 @@ requires-dist = [
     { name = "lxml", specifier = ">=6.1.0" },
     { name = "pillow", specifier = ">=12.3.0" },
     { name = "pyobjc", specifier = ">=11.1" },
+    { name = "pyobjc-framework-quartz", specifier = ">=11.1" },
+    { name = "pyobjc-framework-vision", specifier = ">=11.1" },
     { name = "pytest", specifier = ">=8.0" },
 ]
 
