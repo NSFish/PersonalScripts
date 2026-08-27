@@ -53,7 +53,7 @@ def process_subdir(
     found_keyword = False
     match_count = 0
     for jf in json_files:
-        img_name = jf.name[:-5]  # 去掉 .json
+        img_name = jf.name[:-5]  # 去掉 .json（OCR json 命名为 <原图名>.json，含扩展名，如 img1.jpg.json）
         img_path = sub_dir / img_name
         ocr_text = load_texts(jf)
         if not ocr_text or ocr_text == "null":
