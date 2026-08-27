@@ -3,7 +3,8 @@
 仅在 macOS（pyobjc + Vision 可用）下运行；其它平台用 importorskip 跳过。
 """
 import json
-import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -34,10 +35,11 @@ def test_ocr_process_writes_texts_json(tmp_path: Path):
     sub.mkdir(parents=True)
     _make_text_image(sub / "a.jpg", "OCR Test 42")
 
-    r = __import__("subprocess").run(
-        [__import__("sys").executable, str(Path(__file__).parent.parent / "src" / "ocr_process.py"), str(parent)],
+    r = subprocess.run(
+        [sys.executable, str(Path(__file__).parent.parent / "src" / "ocr_process.py"), str(parent)],
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     assert r.returncode == 0, r.stderr
 

@@ -99,8 +99,14 @@ def main() -> None:
         new_name = f"{num_padded} {processed}" if processed else f"{num_padded}"
 
         if name != new_name:
+            dest = target / new_name
+            if dest.exists():
+                # os.rename 会静默覆盖已有文件，冲突时跳过并报错
+                error_log.append(f"目标已存在，跳过重命名: '{name}' -> '{new_name}'")
+                renamed_files.append(name)
+                continue
             try:
-                file.rename(target / new_name)
+                file.rename(dest)
                 rename_map.append(f"{name} -> {new_name}")
                 renamed_files.append(new_name)
             except OSError as e:

@@ -39,7 +39,6 @@ def main() -> None:
                 for name in names:
                     if name.endswith("/") or name.endswith("\\"):
                         continue
-                    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
                     if not is_image_file(name):
                         continue
                     # 取压缩包内相对路径的最后一段作为文件名，避免路径穿越
@@ -47,6 +46,9 @@ def main() -> None:
                     if not dest_name:
                         continue
                     dest = target / dest_name
+                    if dest.exists():
+                        print(f"⚠️ 跳过重名文件: {dest_name}")
+                        continue
                     with zf.open(name) as src, open(dest, "wb") as out:
                         out.write(src.read())
                     moved += 1
@@ -57,7 +59,8 @@ def main() -> None:
         if moved > 0:
             print(f"✅ 解压 {file.name} 成功 (移动了 {moved} 张图片)")
         else:
-            target.rmdir() if (target.is_dir() and not any(target.iterdir())) else None
+            if target.is_dir() and not any(target.iterdir()):
+                target.rmdir()
             print(f"❌ 解压 {file.name} 失败: 未找到支持的图片文件")
 
     print("处理完成！")

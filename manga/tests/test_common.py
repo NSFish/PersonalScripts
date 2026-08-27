@@ -21,6 +21,12 @@ def test_natural_key():
     assert natural_key("x1y") == ["x", 1, "y"]
 
 
+def test_natural_key_superscript_digit():
+    # 上标字符不是十进制位（re 的 \d 不匹配），作为普通文本段参与排序，不应崩溃
+    assert natural_key("第²话") == ["第²话"]
+    assert natural_key("a2²b") == ["a", 2, "²b"]
+
+
 def test_pad():
     assert pad(3, 2) == "03"
     assert pad(12, 2) == "12"

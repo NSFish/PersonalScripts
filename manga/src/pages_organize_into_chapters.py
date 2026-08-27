@@ -32,7 +32,11 @@ def main() -> None:
             subfolder = parts[-2]
             dest_dir = folder / subfolder
             dest_dir.mkdir(parents=True, exist_ok=True)
-            file.rename(dest_dir / file.name)
+            dest = dest_dir / file.name
+            if dest.exists():
+                print(f"警告: 目标已存在，跳过: {dest}")
+                continue
+            file.rename(dest)
             print(f"已移动: {file.name} → {subfolder}/")
         else:
             print(f"警告: 无法从 '{file.name}' 中提取子文件夹名（格式不符合要求）")

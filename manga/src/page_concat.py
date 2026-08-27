@@ -1,5 +1,7 @@
 import argparse
 import os
+import sys
+
 from PIL import Image
 
 def parse_arguments():
@@ -39,17 +41,20 @@ def validate_images(image1_path, image2_path, direction):
             return (width1, height1 + height2)
 
 def merge_images(direction, image1_path, image2_path):
-    """执行图片拼接"""
-    with Image.open(image1_path) as img1, Image.open(image2_path) as img2:
-        if direction == 'horizontal':
-            new_img = Image.new('RGB', (img1.width + img2.width, img1.height))
-            new_img.paste(img1, (0, 0))
-            new_img.paste(img2, (img1.width, 0))
-        else:
-            new_img = Image.new('RGB', (img1.width, img1.height + img2.height))
-            new_img.paste(img1, (0, 0))
-            new_img.paste(img2, (0, img1.height))
-        return new_img
+    """执行图片拼接（输入统一转 RGB，避免透明通道被丢弃）"""
+    with Image.open(image1_path) as im1:
+        img1 = im1.convert("RGB")
+    with Image.open(image2_path) as im2:
+        img2 = im2.convert("RGB")
+    if direction == 'horizontal':
+        new_img = Image.new('RGB', (img1.width + img2.width, img1.height))
+        new_img.paste(img1, (0, 0))
+        new_img.paste(img2, (img1.width, 0))
+    else:
+        new_img = Image.new('RGB', (img1.width, img1.height + img2.height))
+        new_img.paste(img1, (0, 0))
+        new_img.paste(img2, (0, img1.height))
+    return new_img
 
 def main():
     try:
@@ -62,9 +67,9 @@ def main():
         # 执行拼接
         merged_image = merge_images(direction, args.image1, args.image2)
 
-        # 生成输出路径
+        # 生成输出路径（中间产物用无损 PNG，最终交给 primage 转 avif）
         base_dir = os.path.dirname(os.path.commonprefix([args.image1, args.image2]))
-        output_name = f"merged_{os.path.basename(args.image1)}_{os.path.basename(args.image2)}.jpg"
+        output_name = f"merged_{os.path.basename(args.image1)}_{os.path.basename(args.image2)}.png"
         output_path = os.path.join(base_dir, output_name)
 
         merged_image.save(output_path)
@@ -73,6 +78,7 @@ def main():
     except Exception as e:
         print(f"错误：{str(e)}")
         print("用法示例：python script.py -H image1.jpg image2.jpg")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

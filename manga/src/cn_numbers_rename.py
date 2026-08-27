@@ -57,6 +57,7 @@ def main() -> None:
     print(f"操作模式: {mode}")
     print()
 
+    failures = 0
     results = []  # prefix: (sub, name, arabic) ; replace: (sub, name, new_name)
     for sub in sorted(d for d in folder.iterdir() if d.is_dir()):
         name = sub.name
@@ -69,6 +70,7 @@ def main() -> None:
             arabic = cn_to_arab(m.group(1))
             if arabic is None:
                 print(f"{name} -> 转换失败 (无法识别的数字格式: {m.group(1)})")
+                failures += 1
                 continue
             results.append((sub, name, arabic))
         else:
@@ -79,6 +81,7 @@ def main() -> None:
                 continue
             if new == "FAIL":
                 print(f"{name} -> 转换失败")
+                failures += 1
                 continue
             results.append((sub, name, new))
 
@@ -92,11 +95,20 @@ def main() -> None:
             new_name = f"{pad(idx, width)} {name}"
         else:
             new_name = payload
+        target = sub.with_name(new_name)
+        if not args.dry_run and target.exists():
+            # os.rename 对目录会覆盖同名空目录或直接报错，冲突时跳过
+            print(f"{name} -> 跳过 (目标已存在: {new_name})")
+            failures += 1
+            continue
         print(f"{name} -> {new_name}")
         if not args.dry_run:
-            sub.rename(sub.with_name(new_name))
+            sub.rename(target)
 
     print(f"\n处理完成! 共处理 {len(results)} 个子文件夹")
+    if failures:
+        print(f"❌ {failures} 个子文件夹处理失败")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

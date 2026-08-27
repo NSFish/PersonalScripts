@@ -25,35 +25,34 @@ def add_sequential_prefix(folder_path):
         print(f"找到 {len(subfolders)} 个子文件夹")
 
         folder_data = []
-        pattern = re.compile(r'第(\d+|[零一二三四五六七八九十百千万]+)(条|话)')
+        # 锚定行首：已加过序号前缀的名字（如 "0 第3话 xxx"）不会再次命中，保证幂等
+        pattern = re.compile(r'^第(\d+|[零一二三四五六七八九十百千万]+)(条|话)')
 
         for folder_name in subfolders:
-            match = pattern.search(folder_name)
+            match = pattern.match(folder_name)
             if not match:
                 print(f"格式不匹配: {folder_name}")
                 continue
 
             chinese_num = match.group(1)
-            unit = match.group(2)
-            try:
-                arabic_num = cn_to_arab(chinese_num)
-                folder_data.append({
-                    'original_name': folder_name,
-                    'arabic_num': arabic_num,
-                    'unit': unit,
-                })
-                print(f"匹配: {folder_name} -> 阿拉伯数字: {arabic_num} -> 单位: {unit}")
-            except Exception as e:
-                print(f"转换失败: {folder_name}, 错误: {e}")
+            arabic_num = cn_to_arab(chinese_num)
+            if arabic_num is None:
+                print(f"转换失败: {folder_name} (无法识别的数字格式: {chinese_num})")
+                continue
+            folder_data.append({
+                'original_name': folder_name,
+                'arabic_num': arabic_num,
+            })
+            print(f"匹配: {folder_name} -> 阿拉伯数字: {arabic_num}")
 
         if not folder_data:
-            print("未找到符合'第X条'或'第X话'格式的子文件夹")
-            return False
+            print("未找到符合'第X条'或'第X话'格式的子文件夹，无事可做")
+            return True
 
         folder_data.sort(key=lambda x: x['arabic_num'])
 
         total_folders = len(folder_data)
-        num_digits = len(str(total_folders - 1))
+        num_digits = max(1, len(str(total_folders)))
 
         print(f"\n排序结果:")
         for i, data in enumerate(folder_data):

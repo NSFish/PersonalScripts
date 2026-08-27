@@ -73,11 +73,12 @@ def organize_manga(input_dir, dir_page, contents_path):
 
     # 拆分图片到章节文件夹
     current_index = dir_index + 1  # 从目录页下一页开始
-    for idx, ((title, _), count) in enumerate(zip(chapters, chapter_counts)):
+    for (title, _), count in zip(chapters, chapter_counts):
         chapter_dir = os.path.join(output_dir, title)
         os.makedirs(chapter_dir, exist_ok=True)
 
         # 复制当前章节的图片
+        saved = 0
         for i in range(count):
             if current_index >= len(all_files):
                 print(f"警告: 章节 {title} 预期 {count} 页，但仅剩 {i} 页可用")
@@ -87,8 +88,9 @@ def organize_manga(input_dir, dir_page, contents_path):
             dst = os.path.join(chapter_dir, all_files[current_index])
             shutil.copy2(src, dst)
             current_index += 1
+            saved += 1
 
-        print(f"章节 [{title}] 已保存 {min(count, i+1)} 页")
+        print(f"章节 [{title}] 已保存 {saved} 页")
 
     print(f"\n处理完成! 共拆分 {len(chapters)} 个章节到目录: {output_dir}")
 

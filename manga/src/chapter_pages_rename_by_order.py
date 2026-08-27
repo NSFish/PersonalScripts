@@ -40,11 +40,11 @@ def process_directory(d: Path, dry_run: bool, verbose: bool) -> None:
     for i, (f, new_name) in enumerate(plan):
         tmp = f.with_name(f"__rename_tmp_{i}__{f.suffix}")
         f.rename(tmp)
-        tmps.append((tmp, new_name))
+        tmps.append((f.name, tmp, new_name))
 
-    for tmp, new_name in tmps:
+    for orig_name, tmp, new_name in tmps:
         tmp.rename(tmp.with_name(new_name))
-        print(f'✅  "{tmp.with_name(new_name).name}" -> "{new_name}"')
+        print(f'✅  "{orig_name}" -> "{new_name}"')
 
 
 def main() -> None:

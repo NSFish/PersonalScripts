@@ -32,7 +32,8 @@ def cg_image_from_path(path: Path):
     return Quartz.CGImageSourceCreateImageAtIndex(src, 0, None)
 
 
-def ocr_image(cg_image) -> str:
+def ocr_image(cg_image):
+    """识别图片文字，按行拼接；OCR 请求失败返回 None（区别于识别结果为空）。"""
     request = Vision.VNRecognizeTextRequest.new()
     request.setRecognitionLanguages_(REC_LANGS)
     request.setRecognitionLevel_(Vision.VNRequestTextRecognitionLevelAccurate)
@@ -40,9 +41,9 @@ def ocr_image(cg_image) -> str:
     handler = Vision.VNImageRequestHandler.alloc().initWithCGImage_options_(cg_image, None)
     ok, error = handler.performRequests_error_([request], None)
     if not ok or error:
-        return ""
+        return None
     lines = []
-    for obs in request.results():
+    for obs in request.results() or []:
         txt = obs.text()
         if txt:
             lines.append(txt)
@@ -58,6 +59,9 @@ def ocr_subdir(sub: Path, out_sub: Path, verbose: bool) -> str:
             errors.append(f"无法读取图片: {img.name}")
             continue
         text = ocr_image(cg)
+        if text is None:
+            errors.append(f"OCR 请求失败: {img.name}")
+            continue
         (out_sub / f"{img.name}.json").write_text(
             json.dumps({"texts": text}, ensure_ascii=False, indent=2),
             encoding="utf-8",
@@ -99,11 +103,8 @@ def main() -> None:
         if errs:
             (output_dir / sub.name / "ocr_errors.log").write_text(errs, encoding="utf-8")
             print(f"⚠️ {sub.name} 处理完成但有错误")
-        elif (output_dir / sub.name / "ocr_errors.log").exists():
-            (output_dir / sub.name / "ocr_errors.log").unlink()
-        else:
-            if args.verbose:
-                print(f"✅ {sub.name} 处理成功")
+        elif args.verbose:
+            print(f"✅ {sub.name} 处理成功")
         print("----------------------------------------")
 
     duration = int(time.time() - start)

@@ -41,22 +41,18 @@ def process_subdir(
             print(f"⚠️ 跳过: {sub_name} (无OCR结果)")
         return
 
-    sub_output_dir = output_dir / sub_name
-    sub_output_dir.mkdir(parents=True, exist_ok=True)
-
     json_files = sorted(ocr_sub.glob("*.json"))
     if not json_files:
         if verbose:
             print(f"⚠️ 跳过: {sub_name} (无JSON文件)")
         return
 
-    found_keyword = False
-    match_count = 0
+    matches = []
     for jf in json_files:
         img_name = jf.name[:-5]  # 去掉 .json（OCR json 命名为 <原图名>.json，含扩展名，如 img1.jpg.json）
         img_path = sub_dir / img_name
         ocr_text = load_texts(jf)
-        if not ocr_text or ocr_text == "null":
+        if not ocr_text:
             continue
 
         if verbose:
@@ -65,26 +61,33 @@ def process_subdir(
 
         if any(kw in ocr_text for kw in keywords):
             if img_path.is_file():
-                if dry_run:
-                    shutil.copy(img_path, sub_output_dir)
-                    print(f"   预览: 复制 {img_path} 到 {sub_output_dir}")
-                else:
-                    shutil.move(img_path, sub_output_dir)
-                    print(f"   匹配图片: {img_path} 已移动到 {sub_output_dir}")
-                match_count += 1
-                found_keyword = True
+                matches.append(img_path)
             elif verbose:
                 print(f"   ⚠️ 图片不存在: {img_path}")
 
-    if found_keyword and match_count > 0:
+    if not matches:
+        if verbose:
+            print(f"⚠️ {sub_name} 中未找到匹配图片")
+        return
+
+    sub_output_dir = output_dir / sub_name
+    if dry_run:
+        for img_path in matches:
+            print(f"   预览: {img_path} -> {sub_output_dir}")
+        print(f"✅ {sub_name} 中找到 {len(matches)} 张匹配图片 (dry-run，未移动)")
+        return
+
+    sub_output_dir.mkdir(parents=True, exist_ok=True)
+    match_count = 0
+    for img_path in matches:
+        shutil.move(img_path, sub_output_dir)
+        print(f"   匹配图片: {img_path} 已移动到 {sub_output_dir}")
+        match_count += 1
+
+    if match_count > 0:
         new_sub_output_dir = output_dir / f"{sub_name}（{match_count}）"
         sub_output_dir.rename(new_sub_output_dir)
         print(f"✅ {sub_name} 中找到 {match_count} 张匹配图片")
-    else:
-        if verbose:
-            print(f"⚠️ {sub_name} 中未找到匹配图片")
-        if not dry_run and sub_output_dir.is_dir():
-            shutil.rmtree(sub_output_dir)
 
 
 def main() -> None:
@@ -106,11 +109,13 @@ def main() -> None:
         sys.exit(1)
 
     output_dir = parent_dir.parent / "keyword_output"
-    if output_dir.exists():
-        shutil.rmtree(output_dir)
-    output_dir.mkdir(parents=True)
-
-    print(f"📁 创建输出目录: {output_dir}")
+    if not args.dry_run:
+        if output_dir.exists():
+            shutil.rmtree(output_dir)
+        output_dir.mkdir(parents=True)
+        print(f"📁 创建输出目录: {output_dir}")
+    else:
+        print("🏃 dry-run 模式：仅预览匹配结果，不移动文件、不创建输出目录")
 
     subdirs = sorted(p for p in ocr_dir.iterdir() if p.is_dir())
     total_dirs = len(subdirs)
@@ -126,13 +131,14 @@ def main() -> None:
         print("----------------------------------------")
 
     duration = int(time.time() - start)
-    out_dirs = sum(1 for p in output_dir.iterdir() if p.is_dir())
-    total_matches = sum(1 for p in output_dir.rglob("*") if p.is_file())
     print(f"\n✅ 关键词匹配完成! 耗时: {duration // 60} 分 {duration % 60} 秒")
     print(f"处理了 {total_dirs} 个子目录")
-    print(f"找到 {out_dirs} 个包含匹配图片的目录")
-    print(f"共找到 {total_matches} 张匹配图片")
-    print(f"📁 匹配结果保存在: {output_dir}")
+    if not args.dry_run:
+        out_dirs = sum(1 for p in output_dir.iterdir() if p.is_dir())
+        total_matches = sum(1 for p in output_dir.rglob("*") if p.is_file())
+        print(f"找到 {out_dirs} 个包含匹配图片的目录")
+        print(f"共找到 {total_matches} 张匹配图片")
+        print(f"📁 匹配结果保存在: {output_dir}")
 
 
 if __name__ == "__main__":

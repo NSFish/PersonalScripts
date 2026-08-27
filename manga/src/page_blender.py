@@ -35,12 +35,7 @@ def parse_args():
     parser.add_argument('image2_path', help='第二张图片路径')
     parser.add_argument('-h', '--help', action='help', help='显示帮助信息')
 
-    try:
-        args = parser.parse_args()
-    except argparse.ArgumentError as e:
-        print(f"参数错误: {e}")
-        print(__doc__)
-        sys.exit(1)
+    args = parser.parse_args()
 
     # 确定方向
     if args.up:
@@ -57,10 +52,10 @@ def parse_args():
     return direction, args.number, args.image1_path, args.image2_path
 
 def process_images(direction, number, img1_path, img2_path):
-    """处理图片裁剪与拼接"""
+    """处理图片裁剪与拼接（输入统一转 RGB，避免透明通道被丢弃）"""
     # 打开图片
-    img1 = Image.open(img1_path)
-    img2 = Image.open(img2_path)
+    img1 = Image.open(img1_path).convert("RGB")
+    img2 = Image.open(img2_path).convert("RGB")
 
     # 获取图片尺寸
     width1, height1 = img1.size
@@ -69,6 +64,10 @@ def process_images(direction, number, img1_path, img2_path):
     # 验证图片尺寸是否相同
     if (width1, height1) != (width2, height2):
         raise ValueError("两张图片的尺寸必须完全相同")
+
+    # 验证数字参数有效性（负数会导致 paste 位置错乱，直接拒绝）
+    if number <= 0:
+        raise ValueError(f"裁剪尺寸必须为正数，当前: {number}")
 
     # 根据方向验证数字参数有效性
     if direction in ['up', 'down']:
@@ -135,9 +134,8 @@ def main():
         if not output_dir:
             output_dir = os.getcwd()
 
-        # 生成输出文件名（保留原始图片的扩展名）
-        _, ext = os.path.splitext(img1_path)
-        output_filename = f"result_{direction}_{number}{ext}"
+        # 生成输出文件名（中间产物用无损 PNG，最终交给 primage 转 avif）
+        output_filename = f"result_{direction}_{number}.png"
         # 拼接输出路径（放在输入图片的旁边）
         output_path = os.path.join(output_dir, output_filename)
 

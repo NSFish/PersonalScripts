@@ -2,6 +2,7 @@
 """扫描文件夹，统计图片主流宽度并按文件名排序列出不符合的图片。
 
 替代原 check_page_width.sh：用 Pillow 读取宽度（跨平台，不再依赖 macOS 的 sips）。
+存在宽度不符合的图片时退出码为 1，便于在管道/脚本中检测。
 """
 import argparse
 import sys
@@ -60,6 +61,7 @@ def main() -> None:
 
     if unmatched_str:
         print(f"不符合的图片（按文件名排序）：{unmatched_str}")
+        sys.exit(1)
     else:
         print(f"所有图片宽度均为 {main_width} 像素")
 

@@ -1,31 +1,17 @@
 import os
 import shutil
 import subprocess
+import sys
 import zipfile
-from Foundation import NSURL
+
+from _common import IMAGE_EXTS, get_mac_tags, set_mac_tags
 
 # ===================== 配置区（可根据需求修改） =====================
-# 图片支持的格式（可自行增删）
-SUPPORTED_IMG_FORMATS = ('.jpg', '.jpeg', '.png', '.webp', '.avif')
+# 图片支持的格式（与 _common.IMAGE_EXTS 保持一致）
+SUPPORTED_IMG_FORMATS = IMAGE_EXTS
 # 压缩时排除的隐藏文件（macOS 自带 .DS_Store 等）
 EXCLUDE_HIDDEN_FILES = ['.DS_Store', '__MACOSX']
 # =================================================================
-
-def get_zip_tag(zip_path):
-    """读取文件的mac标签（原函数）"""
-    url = NSURL.fileURLWithPath_(zip_path)
-    values, _ = url.resourceValuesForKeys_error_(['NSURLTagNamesKey'], None)
-    tags = values.get('NSURLTagNamesKey', [])
-    return tags
-
-def set_zip_tag(zip_path, tags):
-    """写入文件的mac标签（原函数，修复了error参数）"""
-    url = NSURL.fileURLWithPath_(zip_path)
-    error = None
-    # 修复：error需要传引用
-    success = url.setResourceValue_forKey_error_(tags, 'NSURLTagNamesKey', error)
-    if not success:
-        print(f"⚠️ 标签写入失败: {zip_path}")
 
 def convert_to_avif(input_path, output_path):
     """调用 primage 将图片转换为 AVIF（-q 90 保证高质量）"""
@@ -69,10 +55,11 @@ def process_single_zip(zip_file_path, input_dir, output_dir):
     zip_name = os.path.splitext(os.path.basename(zip_file_path))[0]
     print(f"\n===== 开始处理: {zip_name}.zip =====")
 
-    # 1. 解压路径（临时解压到输入目录）
+    # 1. 解压路径（临时解压到输入目录；先清掉上次运行可能残留的同名目录）
     extract_folder = os.path.join(input_dir, zip_name)
-    if not os.path.exists(extract_folder):
-        os.makedirs(extract_folder)
+    if os.path.exists(extract_folder):
+        shutil.rmtree(extract_folder)
+    os.makedirs(extract_folder)
 
     # 解压zip
     with zipfile.ZipFile(zip_file_path, 'r') as zf:
@@ -90,7 +77,12 @@ def process_single_zip(zip_file_path, input_dir, output_dir):
                 if ext != '.avif':
                     all_avif = False
 
-    # ===================== 【新增逻辑】无需处理 → 直接复制原文件 =====================
+    if not img_files:
+        print(f"❌ {zip_name}.zip 内未找到任何支持的图片，终止处理")
+        shutil.rmtree(extract_folder, ignore_errors=True)
+        sys.exit(1)
+
+    # ===================== 无需处理 → 直接复制原文件 =====================
     if all_avif:
         print(f"ℹ️ {zip_name}.zip 内全是AVIF格式，无需处理，直接复制到输出目录")
 
@@ -102,10 +94,12 @@ def process_single_zip(zip_file_path, input_dir, output_dir):
         print(f"✅ 已复制原压缩包: {target_zip_path}")
 
         # 复制标签
-        original_tags = get_zip_tag(zip_file_path)
+        original_tags = get_mac_tags(zip_file_path)
         if original_tags:
-            set_zip_tag(target_zip_path, original_tags)
-            print(f"🏷️ 已复制标签到复制文件: {original_tags}")
+            if set_mac_tags(target_zip_path, original_tags):
+                print(f"🏷️ 已复制标签到复制文件: {original_tags}")
+            else:
+                print(f"⚠️ 标签写入失败: {target_zip_path}")
 
         # 删除临时解压文件夹
         shutil.rmtree(extract_folder, ignore_errors=True)
@@ -119,11 +113,13 @@ def process_single_zip(zip_file_path, input_dir, output_dir):
         file_base = os.path.splitext(file_name)[0]
         avif_path = os.path.join(file_dir, file_base + '.avif')
 
-        # 转换
-        if convert_to_avif(img_path, avif_path):
-            # 删除原图片
-            os.remove(img_path)
-            converted_count += 1
+        # 转换；任一图片失败直接报错退出（不再静默打包混入非 avif 图）
+        if not convert_to_avif(img_path, avif_path):
+            print(f"❌ 转换失败，终止处理: {img_path}")
+            sys.exit(1)
+        # 删除原图片
+        os.remove(img_path)
+        converted_count += 1
 
     print(f"🔄 转换完成: 共转换 {converted_count} 张图片为AVIF")
 
@@ -141,10 +137,12 @@ def process_single_zip(zip_file_path, input_dir, output_dir):
     shutil.rmtree(output_folder, ignore_errors=True)
 
     # 7. 复制原zip的标签到新zip
-    original_tags = get_zip_tag(zip_file_path)
+    original_tags = get_mac_tags(zip_file_path)
     if original_tags:
-        set_zip_tag(output_zip_path, original_tags)
-        print(f"🏷️ 已复制标签: {original_tags}")
+        if set_mac_tags(output_zip_path, original_tags):
+            print(f"🏷️ 已复制标签: {original_tags}")
+        else:
+            print(f"⚠️ 标签写入失败: {output_zip_path}")
     else:
         print(f"ℹ️ 原文件无标签，无需复制")
 
@@ -152,15 +150,14 @@ def process_single_zip(zip_file_path, input_dir, output_dir):
 
 def main():
     # 1. 获取输入文件夹（命令行参数）
-    import sys
     if len(sys.argv) != 2:
         print(f"使用方法: python3 {sys.argv[0]} /path/to/输入文件夹A")
-        return
+        sys.exit(1)
 
     input_dir = sys.argv[1].rstrip('/')
     if not os.path.isdir(input_dir):
         print(f"❌ 输入目录不存在: {input_dir}")
-        return
+        sys.exit(1)
 
     # 2. 创建输出目录（输入目录同级，命名：A_avif）
     output_dir = f"{input_dir}_avif"
