@@ -8,7 +8,7 @@ from pathlib import Path
 
 import zipfile
 
-IMAGE_EXTENSIONS = ("jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff", "avif")
+from _common import is_image_file
 
 
 def main() -> None:
@@ -40,7 +40,7 @@ def main() -> None:
                     if name.endswith("/") or name.endswith("\\"):
                         continue
                     ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
-                    if ext not in IMAGE_EXTENSIONS:
+                    if not is_image_file(name):
                         continue
                     # 取压缩包内相对路径的最后一段作为文件名，避免路径穿越
                     dest_name = Path(name).name

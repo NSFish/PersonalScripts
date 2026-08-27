@@ -4,6 +4,8 @@ import argparse
 import re
 import sys
 
+from _common import is_image_file, natural_key
+
 def parse_contents_file(contents_path):
     """
     解析章节信息文件
@@ -35,11 +37,6 @@ def parse_contents_file(contents_path):
 
     return chapters
 
-def natural_key(filename):
-    """自然排序 key：数字按数值比较，如 2 < 10"""
-    base = os.path.splitext(filename)[0]
-    return [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', base)]
-
 def organize_manga(input_dir, dir_page, contents_path):
     # 解析章节信息
     chapters = parse_contents_file(contents_path)
@@ -50,10 +47,9 @@ def organize_manga(input_dir, dir_page, contents_path):
     # 添加排序：按照章节起始页码（元组第二个元素）升序排列
     chapters.sort(key=lambda x: x[1])
 
-    # 获取并排序图片文件（增加对AVIF格式的支持）
-    supported_formats = ('.jpg', '.jpeg', '.png', '.avif', '.webp', '.gif', '.bmp', '.tiff')
+    # 获取并排序图片文件
     all_files = sorted(
-        [f for f in os.listdir(input_dir) if f.lower().endswith(supported_formats)],
+        [f for f in os.listdir(input_dir) if is_image_file(f)],
         key=natural_key
     )
 

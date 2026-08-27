@@ -8,7 +8,7 @@ import argparse
 import sys
 from pathlib import Path
 
-SUPPORTED = ("jpg", "jpeg", "png", "bmp", "avif", "webp")
+from _common import is_image_file
 
 
 def main() -> None:
@@ -24,7 +24,7 @@ def main() -> None:
     for file in sorted(folder.iterdir()):
         if not file.is_file():
             continue
-        if file.suffix.lower().lstrip(".") not in SUPPORTED:
+        if not is_image_file(file):
             continue
 
         parts = file.name.rsplit("_")

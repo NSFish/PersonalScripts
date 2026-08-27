@@ -4,6 +4,8 @@ import argparse
 import shutil
 from PIL import Image
 
+from _common import is_image_file
+
 RATIO_THRESHOLD = 1.4  # 宽/高 超过该比例才视为双页，避免误切单张宽图/封面
 
 
@@ -58,15 +60,12 @@ def process_directory(input_dir):
     output_dir = os.path.join(input_parent, f"{input_basename}_split")
     os.makedirs(output_dir, exist_ok=True)
 
-    # 支持的图片格式
-    supported_formats = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.avif')
-
     # 遍历目录中的所有文件
     for filename in os.listdir(input_dir):
         file_path = os.path.join(input_dir, filename)
 
         # 只处理文件和支持的图片格式
-        if os.path.isfile(file_path) and filename.lower().endswith(supported_formats):
+        if os.path.isfile(file_path) and is_image_file(filename):
             stem, _ = os.path.splitext(filename)
             if stem.endswith('_01') or stem.endswith('_02'):
                 continue  # 跳过已拆分产生的子页，避免重复拆分

@@ -1,7 +1,8 @@
 import os
 import sys
 import re
-import cn2an
+
+from _common import cn_to_arab, pad
 
 
 def add_sequential_prefix(folder_path):
@@ -35,7 +36,7 @@ def add_sequential_prefix(folder_path):
             chinese_num = match.group(1)
             unit = match.group(2)
             try:
-                arabic_num = int(chinese_num) if chinese_num.isdigit() else cn2an.cn2an(chinese_num, "normal")
+                arabic_num = cn_to_arab(chinese_num)
                 folder_data.append({
                     'original_name': folder_name,
                     'arabic_num': arabic_num,
@@ -61,7 +62,7 @@ def add_sequential_prefix(folder_path):
         print(f"\n开始重命名...")
         for i, data in enumerate(folder_data):
             old_path = os.path.join(folder_path, data['original_name'])
-            new_name = f"{i:0{num_digits}} {data['original_name']}"
+            new_name = f"{pad(i, num_digits)} {data['original_name']}"
             new_path = os.path.join(folder_path, new_name)
 
             try:

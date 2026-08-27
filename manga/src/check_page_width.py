@@ -10,7 +10,7 @@ from pathlib import Path
 
 from PIL import Image
 
-SUPPORTED = ("jpg", "jpeg", "png", "avif", "webp")
+from _common import is_image_file, IMAGE_EXTS
 
 
 def main() -> None:
@@ -26,14 +26,14 @@ def main() -> None:
         sys.exit(1)
 
     print(f"正在扫描文件夹：{target}")
-    print(f"支持的图片格式：{' '.join(SUPPORTED)}")
+    print(f"支持的图片格式：{' '.join(IMAGE_EXTS)}")
     print("----------------------------------------")
 
     records = []  # (width, filename)
     for f in target.iterdir():
         if not f.is_file():
             continue
-        if f.suffix.lower().lstrip(".") not in SUPPORTED:
+        if not is_image_file(f):
             continue
         try:
             with Image.open(f) as img:

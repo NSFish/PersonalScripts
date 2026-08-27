@@ -5,13 +5,10 @@
 支持 -n/--dry-run 预览、-v/--verbose。
 """
 import argparse
-import re
 import sys
 from pathlib import Path
 
-
-def natural_key(s: str):
-    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", s)]
+from _common import natural_key, pad
 
 
 def process_directory(d: Path, dry_run: bool, verbose: bool) -> None:
@@ -31,7 +28,7 @@ def process_directory(d: Path, dry_run: bool, verbose: bool) -> None:
     digit = max(2, len(str(n)))
     plan = []
     for i, f in enumerate(files):
-        new_name = f"{i:0{digit}d}{f.suffix}"
+        new_name = f"{pad(i, digit)}{f.suffix}"
         plan.append((f, new_name))
 
     if dry_run:

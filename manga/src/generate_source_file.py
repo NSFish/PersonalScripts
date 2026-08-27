@@ -7,15 +7,12 @@
 - 数字与汉字间自动加空格（CJK 码点 0x4E00-0x9FFF）
 """
 import argparse
-import cn2an
 import re
 import string
 import sys
 from pathlib import Path
 
-
-def natural_key(s: str):
-    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", s)]
+from _common import natural_key, pad, cn_to_arab
 
 
 def is_han(ch: str) -> bool:
@@ -35,9 +32,8 @@ def extract_number(name: str):
     if m:
         cn = m.group(1)
         rest = m.group(2) or ""
-        try:
-            num = int(cn) if cn.isdigit() else int(cn2an.cn2an(cn, "normal"))
-        except Exception:
+        num = cn_to_arab(cn)
+        if num is None:
             return None
         return num, rest
     # Episode X
@@ -84,7 +80,7 @@ def main() -> None:
             continue
 
         num, rest = extracted
-        num_padded = f"{num:0{width}d}"
+        num_padded = pad(num, width)
         rest = rest.lstrip(string.punctuation + " \t").rstrip(" \t")
 
         # 数字与汉字之间加空格
