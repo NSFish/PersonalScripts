@@ -1,3 +1,4 @@
+"""重新打包目录下的 zip（规范化内部结构与文件名，保留 macOS 标签）。"""
 import os
 import sys
 import zipfile

@@ -1,3 +1,4 @@
+"""水平或垂直拼接两张图片（韩漫拼接）。"""
 import argparse
 import os
 import sys

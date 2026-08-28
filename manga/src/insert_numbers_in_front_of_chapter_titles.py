@@ -1,3 +1,4 @@
+"""给章节子文件夹按“第N话/条”模式加顺序前缀（幂等，可重复运行）。"""
 import os
 import sys
 import re

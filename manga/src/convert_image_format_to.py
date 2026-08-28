@@ -1,3 +1,4 @@
+"""把文件夹内的图片批量转为指定格式（jpeg/png/webp/avif），输出到 `<文件夹>_<格式>`。"""
 import os
 import shutil
 import subprocess

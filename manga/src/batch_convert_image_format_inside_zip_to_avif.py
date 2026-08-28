@@ -1,3 +1,4 @@
+"""批量把 zip 压缩包内的图片转为 AVIF（primage 封装，-q 90）。"""
 import os
 import shutil
 import subprocess

@@ -1,3 +1,4 @@
+"""按章节信息文件（标题+起始页）把一卷图片拆分成章节子文件夹。"""
 import os
 import shutil
 import argparse

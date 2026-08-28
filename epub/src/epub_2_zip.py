@@ -1,3 +1,4 @@
+"""把 EPUB 转成 CBZ/zip（抽取图片与 XHTML 重新打包）。"""
 import os
 import re
 import shutil

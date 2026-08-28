@@ -1,3 +1,4 @@
+"""把宽幅双页漫画图按中线裁切成左右两张单页。"""
 import os
 import sys
 import argparse
