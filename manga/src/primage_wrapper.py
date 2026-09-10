@@ -2,13 +2,15 @@
 """单张图片格式转换（primage 封装）。
 
 替代原 primage_wrapper.sh：检查 primage 是否安装，目标扩展名一致则跳过，
--jpg 映射为 jpeg，-q 90 保证高质量。
+-jpg 映射为 jpeg，质量规则见 _common.primage_quality（avif 用 60，其余用 90）。
 """
 import argparse
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+from _common import run_primage
 
 
 def main() -> None:
@@ -51,10 +53,7 @@ def main() -> None:
     primage_fmt = "jpeg" if target_ext == "jpg" else target_ext
     print(f"正在转换: {image} → {new_path}")
     try:
-        subprocess.run(
-            ["primage", "-f", primage_fmt, "-q", "90", "-o", str(new_path), str(image)],
-            check=True,
-        )
+        run_primage(image, new_path, primage_fmt)
     except subprocess.CalledProcessError:
         print("❌ 转换失败！")
         sys.exit(1)

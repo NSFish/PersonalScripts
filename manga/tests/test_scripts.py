@@ -517,7 +517,7 @@ def test_convert_image_format_to(tmp_path: Path):
     make_img(d / "b.png", 20, 20)
 
     run_ok("convert_image_format_to.py", "jpg", str(d))
-    out = tmp_path / "in_jpg"
+    out = tmp_path / "result" / "in"
     assert out.is_dir()
     assert sorted(p.name for p in out.iterdir()) == ["a.jpg", "b.jpg"]
     assert Image.open(out / "a.jpg").format == "JPEG"
@@ -536,7 +536,7 @@ def test_batch_convert_avif_all_avif_shortcut(tmp_path: Path):
         zf.writestr("page1.avif", b"dummy")  # 仅按扩展名判定，无需真实 avif
 
     run_ok("batch_convert_image_format_inside_zip_to_avif.py", str(d))
-    out_zip = tmp_path / "in_avif" / "book.zip"
+    out_zip = tmp_path / "result" / "book.cbz"
     assert out_zip.is_file()        # 已复制到输出目录（无需转换）
     assert zip_path.is_file()       # 原文件保留
     with zipfile.ZipFile(out_zip) as zf:
@@ -555,10 +555,11 @@ def test_batch_convert_avif_converts(tmp_path: Path):
     shutil.rmtree(inner)
 
     run_ok("batch_convert_image_format_inside_zip_to_avif.py", str(d))
-    out_zip = tmp_path / "in_avif" / "book.zip"
+    out_zip = tmp_path / "result" / "book.cbz"
     assert out_zip.is_file()
     with zipfile.ZipFile(out_zip) as zf:
-        assert zf.namelist() == ["book/a.avif"]
+        # 万能入口保留包内原始目录结构，不再额外套一层包名文件夹
+        assert zf.namelist() == ["a.avif"]
 
 
 def test_batch_convert_avif_no_images_fails(tmp_path: Path):
@@ -584,3 +585,139 @@ def test_batch_convert_avif_failure_raises(tmp_path: Path):
 
     r = run("batch_convert_image_format_inside_zip_to_avif.py", str(d))
     assert r.returncode != 0
+
+
+def test_convert_single_image_file(tmp_path: Path):
+    img = tmp_path / "a.png"
+    make_img(img, 20, 20)
+    run_ok("convert_image_format_to.py", "jpg", str(img))
+    out = tmp_path / "result" / "a.jpg"
+    assert out.is_file()
+    assert Image.open(out).format == "JPEG"
+
+
+def test_convert_single_archive(tmp_path: Path):
+    inner = tmp_path / "book"
+    inner.mkdir()
+    make_img(inner / "a.jpg", 20, 20)
+    zip_path = tmp_path / "book.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.write(inner / "a.jpg", "ch01/a.jpg")
+    shutil.rmtree(inner)
+
+    run_ok("convert_image_format_to.py", "avif", str(zip_path))
+    out_zip = tmp_path / "result" / "book.cbz"
+    assert out_zip.is_file()
+    with zipfile.ZipFile(out_zip) as zf:
+        assert zf.namelist() == ["ch01/a.avif"]
+
+
+def test_convert_single_cbz(tmp_path: Path):
+    make_img(tmp_path / "a.jpg", 20, 20)
+    cbz_path = tmp_path / "book.cbz"
+    with zipfile.ZipFile(cbz_path, "w") as zf:
+        zf.write(tmp_path / "a.jpg", "a.jpg")
+
+    run_ok("convert_image_format_to.py", "avif", str(cbz_path))
+    out_cbz = tmp_path / "result" / "book.cbz"
+    assert out_cbz.is_file()
+    with zipfile.ZipFile(out_cbz) as zf:
+        assert zf.namelist() == ["a.avif"]
+
+
+def test_convert_archives_batch_dir(tmp_path: Path):
+    d = tmp_path / "in"
+    d.mkdir()
+    make_img(d / "a.jpg", 20, 20)
+    with zipfile.ZipFile(d / "book.zip", "w") as zf:
+        zf.write(d / "a.jpg", "a.jpg")
+
+    run_ok("convert_image_format_to.py", "avif", str(d))
+    out_dir = tmp_path / "result"
+    assert (out_dir / "book.cbz").is_file()
+    with zipfile.ZipFile(out_dir / "book.cbz") as zf:
+        assert zf.namelist() == ["a.avif"]
+    # 最外层散图也顺手转了
+    assert (out_dir / "a.avif").is_file()
+
+
+def test_hentai_polish_folder(tmp_path: Path):
+    d = tmp_path / "doujin"
+    d.mkdir()
+    for i in range(1, 13):
+        make_img(d / f"{i}.jpg", 20, 20)
+    (d / "notes.txt").write_text("ignore me")  # 非图片应被跳过
+
+    run_ok("hentai_polish.py", str(d))
+    out = tmp_path / "result" / "doujin.cbz"
+    assert out.is_file()
+    with zipfile.ZipFile(out) as zf:
+        names = zf.namelist()
+        assert names == [f"{i:02d}.avif" for i in range(1, 13)]  # 总数 12 → 宽 2 位
+        assert all(zf.getinfo(n).file_size > 0 for n in names)
+
+
+def test_hentai_polish_archive_order(tmp_path: Path):
+    for n in ("cover.png", "p1.jpg", "p2.jpg", "p10.jpg"):
+        make_img(tmp_path / n, 20, 20)
+    zip_path = tmp_path / "book.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        for n in ("cover.png", "p1.jpg", "p2.jpg", "p10.jpg"):
+            zf.write(tmp_path / n, n)
+
+    run_ok("hentai_polish.py", str(zip_path))
+    out = tmp_path / "result" / "book.cbz"
+    assert out.is_file()
+    with zipfile.ZipFile(out) as zf:
+        # 总数 4 → 宽 1 位；cover < p1 < p2 < p10（自然排序）
+        assert zf.namelist() == ["1.avif", "2.avif", "3.avif", "4.avif"]
+
+
+def test_hentai_polish_batch(tmp_path: Path):
+    d = tmp_path / "A"
+    d.mkdir()
+    make_img(d / "a.jpg", 20, 20)
+    make_img(d / "b.jpg", 20, 20)
+    with zipfile.ZipFile(d / "b1.zip", "w") as zf:
+        zf.write(d / "a.jpg", "a.jpg")
+        zf.write(d / "b.jpg", "b.jpg")
+    with zipfile.ZipFile(d / "b2.zip", "w") as zf:
+        zf.write(d / "a.jpg", "x.jpg")
+
+    run_ok("hentai_polish.py", str(d))
+    out_dir = tmp_path / "result"
+    with zipfile.ZipFile(out_dir / "b1.cbz") as zf:
+        assert zf.namelist() == ["1.avif", "2.avif"]
+    with zipfile.ZipFile(out_dir / "b2.cbz") as zf:
+        assert zf.namelist() == ["1.avif"]
+    # 散图单独打成一包
+    with zipfile.ZipFile(out_dir / "A.cbz") as zf:
+        assert zf.namelist() == ["1.avif", "2.avif"]
+
+
+def test_convert_refuses_result_dir_itself(tmp_path: Path):
+    d = tmp_path / "result"
+    d.mkdir()
+    make_img(d / "a.jpg", 20, 20)
+    r = run("convert_image_format_to.py", "avif", str(d))
+    assert r.returncode != 0
+    r = run("hentai_polish.py", str(d))
+    assert r.returncode != 0
+
+
+def test_binsync_generates_shims(tmp_path: Path):
+    run_ok("_binsync.py", "--out", str(tmp_path))
+    shim = tmp_path / "hentai-polish"
+    assert shim.is_file()
+    assert shim.stat().st_mode & 0o111  # 有执行位
+    text = shim.read_text(encoding="utf-8")
+    assert "hentai_polish.py" in text
+    assert '"$@"' in text
+    assert "DO NOT EDIT" in text
+    # 老别名已删除：统一用 cn-numbers-rename（replace 风格手动加 --style replace）
+    assert not (tmp_path / "convert-chinese-numbers-to-arab").exists()
+    assert not (tmp_path / "convert-cn-numbers-to-arab").exists()
+    assert (tmp_path / "cn-numbers-rename").is_file()
+    # 下划线开头的模块不生成命令
+    assert not (tmp_path / "_common").exists()
+    assert not (tmp_path / "_binsync").exists()

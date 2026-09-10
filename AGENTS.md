@@ -35,6 +35,7 @@
 ## 工程结构
 - 多子项目仓库，互不耦合：`manga/`（漫画处理）、`epub/`（电子书处理），各自有独立的 `pyproject.toml` 与 `.python-version`（均为 3.13）。
 - 根目录的 `ffmpeg` / `ffprobe` 是官方编译版二进制，已用 `.gitattributes` 以 **git-lfs** 跟踪，不要改动或提交到普通对象。
+- `manga/bin/` 下是终端命令垫片（bash 封装 `uv run … python manga/src/xxx.py`，已在用户 `$PATH`），由 `just binsync` 按 `manga/src/*.py` 自动生成（模块名下划线转横线即命令名，下划线开头的模块不生成，带固定参数等特例写在 `manga/src/_binsync.py` 的 `EXTRA_COMMANDS` 里）；该目录 gitignore 不入库。新增/删除/重命名脚本或改垫片模板后跑一次 `just binsync`，平时改代码不用跑。
 
 ## Python 约定
 - 依赖与运行统一用 **uv**：跑脚本/测试用 `uv run --project <子项目> <命令>`；`uv.lock` 已锁定，新增依赖改 `pyproject.toml` 后让 uv 更新锁文件。
@@ -79,6 +80,7 @@
 | OCR（macOS Vision） | `manga/src/ocr_process.py` |
 | 按关键词筛选图片 | `manga/src/keywords_searching.py` |
 | zip 重新打包/规范化 | `manga/src/hentai_zip_rename_inside.py` |
+| 本子一键整理（数字重命名→AVIF→CBZ） | `manga/src/hentai_polish.py` |
 | EPUB → CBZ/zip | `epub/src/epub_2_zip.py` |
 | EPUB XHTML 格式化 | `epub/src/format_xhtml.py` |
 
