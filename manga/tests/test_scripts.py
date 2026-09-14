@@ -10,6 +10,8 @@ import sys
 import zipfile
 from pathlib import Path
 
+import pytest
+
 from PIL import Image
 
 SRC = Path(__file__).parent.parent / "src"
@@ -82,6 +84,48 @@ def test_double_page_crop_split_and_idempotency(tmp_path: Path):
     ]
 
 
+def test_double_page_crop_does_not_overwrite_existing(tmp_path: Path):
+    d = tmp_path / "in"
+    d.mkdir()
+    make_img(d / "single.png", 80, 200)
+
+    out = d.parent / "in_split"
+    out.mkdir()
+    (out / "single.png").write_bytes(b"old")  # 输出目录里同名文件已存在
+
+    r = run_ok("double_page_crop.py", str(d))
+    assert "跳过" in r.stdout
+    assert (out / "single.png").read_bytes() == b"old"  # 未被覆盖
+
+
+def test_double_page_crop_rerun_is_stable(tmp_path: Path):
+    d = tmp_path / "in"
+    d.mkdir()
+    make_img(d / "spread.png", 200, 80)
+    make_img(d / "single.png", 80, 200)
+
+    run_ok("double_page_crop.py", str(d))
+    out = d.parent / "in_split"
+    first = sorted(p.name for p in out.iterdir())
+
+    # 再跑一次：拆出的 _01/_02 不会被重复拆分，输出保持不变
+    run_ok("double_page_crop.py", str(d))
+    assert sorted(p.name for p in out.iterdir()) == first
+
+
+def test_volume_split_negative_page_count_reported(tmp_path: Path):
+    d = tmp_path / "in"
+    d.mkdir()
+    for n in ["1.png", "2.png", "3.png"]:
+        make_img(d / n, 10, 10)
+    # 目录页后只有 2 页，但声明的跨度是 10 页 -> 最后一章页数算出来是负数
+    (tmp_path / "contents.txt").write_text("1 第一章 1\n2 第二章 11\n", encoding="utf-8")
+
+    r = run("volume_split_into_chapters.py", str(d), "1.png", str(tmp_path / "contents.txt"))
+    assert r.returncode != 0
+    assert "页数" in r.stdout and "-8" in r.stdout
+
+
 def test_volume_split(tmp_path: Path):
     d = tmp_path / "in"
     d.mkdir()
@@ -111,6 +155,20 @@ def test_volume_split_zero_page_chapter_counts_correctly(tmp_path: Path):
     assert len(list((out / "1 空章").iterdir())) == 0
     assert len(list((out / "2 第一章").iterdir())) == 2
     assert len(list((out / "3 第二章").iterdir())) == 2
+
+
+def test_volume_split_title_and_cn_number_formats(tmp_path: Path):
+    d = tmp_path / "in"
+    d.mkdir()
+    for n in ["1.png", "2.png", "3.png", "4.png", "5.png", "6.png", "7.png"]:
+        make_img(d / n, 10, 10)
+    # 覆盖 docstring 承诺的另外两种写法：纯标题、中文编号标题；目录页是 2.png，其后共 5 页
+    (tmp_path / "contents.txt").write_text("特别篇 1\n第二章 3\n", encoding="utf-8")
+
+    run_ok("volume_split_into_chapters.py", str(d), "2.png", str(tmp_path / "contents.txt"))
+    out = d.parent / "in_split"
+    assert sorted(p.name for p in (out / "特别篇").iterdir()) == ["3.png", "4.png"]
+    assert sorted(p.name for p in (out / "第二章").iterdir()) == ["5.png", "6.png", "7.png"]
 
 
 def test_cn_numbers_rename_prefix(tmp_path: Path):
@@ -152,6 +210,46 @@ def test_cn_numbers_rename_conflict_skips_and_fails(tmp_path: Path):
     assert (d / "2 测试").is_dir()
 
 
+def test_cn_numbers_rename_prefix_idempotent(tmp_path: Path):
+    d = tmp_path / "p"
+    (d / "第3话 xxx").mkdir(parents=True)
+    (d / "第七条 yyy").mkdir(parents=True)
+
+    # 加过前缀的名字不再命中"第X话/条"开头，重复运行应保持不变
+    run_ok("cn_numbers_rename.py", "--style", "prefix", str(d))
+    run_ok("cn_numbers_rename.py", "--style", "prefix", str(d))
+    assert sorted(p.name for p in d.iterdir()) == [
+        "0 第3话 xxx",
+        "1 第七条 yyy",
+    ]
+
+
+def test_cn_numbers_rename_prefix_conflict_skips(tmp_path: Path):
+    d = tmp_path / "p"
+    (d / "第3话 xxx").mkdir(parents=True)
+    (d / "0 第3话 xxx").mkdir(parents=True)  # 已存在将要生成的目标名
+
+    r = run("cn_numbers_rename.py", "--style", "prefix", str(d))
+    assert r.returncode == 1  # 有跳过 -> 视为失败
+    assert sorted(p.name for p in d.iterdir()) == ["0 第3话 xxx", "第3话 xxx"]
+
+
+def test_cn_numbers_rename_prefix_orders_by_chapter_number(tmp_path: Path):
+    d = tmp_path / "p"
+    (d / "第3话 xxx").mkdir(parents=True)
+    (d / "第七条 yyy").mkdir(parents=True)
+    (d / "第10话 zzz").mkdir(parents=True)
+    (d / "第一百零八话 w").mkdir(parents=True)
+
+    run_ok("cn_numbers_rename.py", "--style", "prefix", str(d))
+    assert [p.name for p in sorted(d.iterdir())] == [
+        "0 第3话 xxx",
+        "1 第七条 yyy",
+        "2 第10话 zzz",
+        "3 第一百零八话 w",
+    ]
+
+
 def test_generate_source_file(tmp_path: Path):
     d = tmp_path / "p"
     d.mkdir()
@@ -188,40 +286,6 @@ def test_chapter_pages_rename_by_order(tmp_path: Path):
     r = run_ok("chapter_pages_rename_by_order.py", str(tmp_path / "top"))
     assert sorted(p.name for p in sub.iterdir()) == ["00.jpg", "01.jpg", "02.jpg"]
     assert '"a.jpg" -> "00.jpg"' in r.stdout  # 日志应显示原文件名
-
-
-def test_insert_numbers(tmp_path: Path):
-    d = tmp_path / "p"
-    (d / "第3话 xxx").mkdir(parents=True)
-    (d / "第七条 yyy").mkdir(parents=True)
-
-    run_ok("insert_numbers_in_front_of_chapter_titles.py", str(d))
-    assert sorted(p.name for p in d.iterdir()) == [
-        "0 第3话 xxx",
-        "1 第七条 yyy",
-    ]
-
-
-def test_insert_numbers_idempotent(tmp_path: Path):
-    d = tmp_path / "p"
-    (d / "第3话 xxx").mkdir(parents=True)
-    (d / "第七条 yyy").mkdir(parents=True)
-
-    run_ok("insert_numbers_in_front_of_chapter_titles.py", str(d))
-    run_ok("insert_numbers_in_front_of_chapter_titles.py", str(d))
-    assert sorted(p.name for p in d.iterdir()) == [
-        "0 第3话 xxx",
-        "1 第七条 yyy",
-    ]
-
-
-def test_insert_numbers_conflict_skips(tmp_path: Path):
-    d = tmp_path / "p"
-    (d / "第3话 xxx").mkdir(parents=True)
-    (d / "0 第3话 xxx").mkdir(parents=True)  # 已存在将要生成的目标名
-
-    run_ok("insert_numbers_in_front_of_chapter_titles.py", str(d))
-    assert sorted(p.name for p in d.iterdir()) == ["0 第3话 xxx", "第3话 xxx"]
 
 
 def test_pages_organize(tmp_path: Path):
@@ -304,6 +368,35 @@ def test_unzip_all_bad_zip_continues(tmp_path: Path):
     assert not (d / "book").exists()
 
 
+def test_unzip_all_no_archives_is_ok(tmp_path: Path):
+    d = tmp_path / "p"
+    d.mkdir()
+    (d / "a.jpg").write_bytes(b"x")
+
+    r = run_ok("unzip_all.py", str(d))
+    assert "未找到" in r.stdout
+
+
+def test_unzip_all_empty_zip_leaves_no_dir(tmp_path: Path):
+    d = tmp_path / "p"
+    d.mkdir()
+    with zipfile.ZipFile(d / "book.zip", "w") as zf:
+        zf.writestr("readme.txt", "no images")
+
+    run_ok("unzip_all.py", str(d))
+    assert not (d / "book").exists()  # 没有图片就不该留下空文件夹
+
+
+def test_unzip_all_accepts_cbz(tmp_path: Path):
+    d = tmp_path / "p"
+    d.mkdir()
+    with zipfile.ZipFile(d / "book.cbz", "w") as zf:
+        zf.writestr("img1.jpg", b"img")
+
+    run_ok("unzip_all.py", str(d))
+    assert (d / "book" / "img1.jpg").is_file()
+
+
 def test_zip_all(tmp_path: Path):
     d = tmp_path / "p"
     d.mkdir(parents=True, exist_ok=True)
@@ -377,9 +470,32 @@ def test_page_concat_vertical(tmp_path: Path):
     assert _region_matches(img, (0, 100, 100, 200), BLUE)  # 下半来自 b
 
 
+def test_page_concat_output_next_to_first_image(tmp_path: Path):
+    # 两张图在不同目录时，输出应落在第一张图所在目录（不能按字符串公共前缀猜）
+    d1 = tmp_path / "d1"
+    d2 = tmp_path / "d2"
+    d1.mkdir()
+    d2.mkdir()
+    make_img(d1 / "a.png", 50, 50)
+    make_img(d2 / "b.png", 50, 50)
+
+    run_ok("page_concat.py", "-H", str(d1 / "a.png"), str(d2 / "b.png"))
+    assert list(d1.glob("merged_*.png"))
+    assert not list(d2.glob("merged_*.png"))
+
+
 def test_page_concat_missing_input_exits_nonzero(tmp_path: Path):
     r = run("page_concat.py", "-H", str(tmp_path / "nope1.png"), str(tmp_path / "nope2.png"))
     assert r.returncode != 0
+
+
+def test_page_concat_size_mismatch_exits_nonzero(tmp_path: Path):
+    make_img(tmp_path / "a.png", 100, 100)
+    make_img(tmp_path / "b.png", 100, 80)
+
+    r = run("page_concat.py", "-H", str(tmp_path / "a.png"), str(tmp_path / "b.png"))
+    assert r.returncode != 0
+    assert "高度" in r.stdout
 
 
 def test_hentai_zip_rename_inside(tmp_path: Path):
@@ -405,6 +521,22 @@ def test_hentai_zip_rename_inside_ignores_stale_tmp_zip(tmp_path: Path):
     r = run("hentai_zip_rename_inside.py", str(d))
     assert r.returncode == 0
     assert stale.read_bytes() == b"garbage"  # 原样保留，未被改动
+
+
+def test_hentai_zip_rename_inside_preserves_mac_tags(tmp_path: Path):
+    import _common  # 测试进程里直接用 _common 打标签（SRC 已在 sys.path，见 conftest/pythonpath）
+
+    d = tmp_path / "p"
+    d.mkdir()
+    zip_path = d / "mycomic.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("oldname/a.txt", "hello")
+    if _common.set_mac_tags(zip_path, ["Red"]) is not True:
+        pytest.skip("macOS 标签不可用")  # 非 macOS 或 pyobjc 缺失
+
+    run_ok("hentai_zip_rename_inside.py", str(d))
+    # 原子替换会用没有标签的新文件覆盖原包，所以标签必须在替换前搬到临时包上
+    assert _common.get_mac_tags(zip_path) == ["Red"]
 
 
 def test_hentai_zip_rename_inside_excludes_hidden(tmp_path: Path):
@@ -695,14 +827,17 @@ def test_hentai_polish_batch(tmp_path: Path):
         assert zf.namelist() == ["1.avif", "2.avif"]
 
 
-def test_convert_refuses_result_dir_itself(tmp_path: Path):
-    d = tmp_path / "result"
+def test_hentai_polish_failure_produces_no_output(tmp_path: Path):
+    d = tmp_path / "doujin"
     d.mkdir()
-    make_img(d / "a.jpg", 20, 20)
-    r = run("convert_image_format_to.py", "avif", str(d))
-    assert r.returncode != 0
+    make_img(d / "1.jpg", 20, 20)
+    (d / "2.jpg").write_text("not a real image")  # primage 无法解码 -> 转换失败
+
     r = run("hentai_polish.py", str(d))
     assert r.returncode != 0
+    # 有转换失败时不输出（不产出残缺的 cbz），原输入保留
+    assert not (tmp_path / "result" / "doujin.cbz").exists()
+    assert (d / "1.jpg").is_file() and (d / "2.jpg").is_file()
 
 
 def test_binsync_generates_shims(tmp_path: Path):
