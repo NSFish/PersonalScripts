@@ -1,152 +1,86 @@
-"""
-图片裁剪与拼接脚本
-用法: script.py -u|-d|-l|-r <number> <image1_path> <image2_path>
-选项:
-  -u, --up      向上裁剪拼接
-  -d, --down    向下裁剪拼接
-  -l, --left    向左裁剪拼接
-  -r, --right   向右裁剪拼接
-参数:
-  number: 裁剪尺寸（像素）
-  image1_path: 第一张图片路径
-  image2_path: 第二张图片路径
-示例: script.py -u 300 image1.jpg image2.jpg
-"""
+#!/usr/bin/env python3
+"""图片裁剪与拼接：从图1 裁下一条边（宽度/高度 = number），贴到图2 的同一边上。
 
-import sys
+输出为图1 同目录下的 `result_<方向>_<number>.png`
+（中间产物用无损 PNG，最终交给 primage 转 avif）。
+
+示例: page_blender.py -u 300 image1.jpg image2.jpg
+"""
 import argparse
-import os
+import sys
+from pathlib import Path
+
 from PIL import Image
 
-def parse_args():
-    """解析命令行参数"""
-    parser = argparse.ArgumentParser(description='图片裁剪与拼接工具', add_help=False)
+# 垂直方向按高度裁，水平方向按宽度裁
+VERTICAL = ("up", "down")
 
-    # 方向参数（互斥组）
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('-u', '--up', action='store_true', help='向上裁剪拼接')
-    group.add_argument('-d', '--down', action='store_true', help='向下裁剪拼接')
-    group.add_argument('-l', '--left', action='store_true', help='向左裁剪拼接')
-    group.add_argument('-r', '--right', action='store_true', help='向右裁剪拼接')
 
-    # 其他参数
-    parser.add_argument('number', type=int, help='裁剪尺寸（像素）')
-    parser.add_argument('image1_path', help='第一张图片路径')
-    parser.add_argument('image2_path', help='第二张图片路径')
-    parser.add_argument('-h', '--help', action='help', help='显示帮助信息')
-
-    args = parser.parse_args()
-
-    # 确定方向
-    if args.up:
-        direction = 'up'
-    elif args.down:
-        direction = 'down'
-    elif args.left:
-        direction = 'left'
-    elif args.right:
-        direction = 'right'
-    else:
-        raise ValueError("必须指定一个方向参数")
-
-    return direction, args.number, args.image1_path, args.image2_path
-
-def process_images(direction, number, img1_path, img2_path):
-    """处理图片裁剪与拼接（输入统一转 RGB，避免透明通道被丢弃）"""
-    # 打开图片
-    img1 = Image.open(img1_path).convert("RGB")
-    img2 = Image.open(img2_path).convert("RGB")
-
-    # 获取图片尺寸
-    width1, height1 = img1.size
-    width2, height2 = img2.size
-
-    # 验证图片尺寸是否相同
-    if (width1, height1) != (width2, height2):
-        raise ValueError("两张图片的尺寸必须完全相同")
-
-    # 验证数字参数有效性（负数会导致 paste 位置错乱，直接拒绝）
+def blend(img1: Image.Image, img2: Image.Image, direction: str, number: int) -> Image.Image:
+    """把 img1 在 direction 那侧的 number 像素贴到 img2 的同一侧，返回新图。"""
+    w, h = img1.size
+    if img2.size != (w, h):
+        raise ValueError(f"两张图片的尺寸必须完全相同：{img1.size} vs {img2.size}")
     if number <= 0:
         raise ValueError(f"裁剪尺寸必须为正数，当前: {number}")
 
-    # 根据方向验证数字参数有效性
-    if direction in ['up', 'down']:
-        if number >= height1:
-            raise ValueError(f"当方向为 '{direction}' 时，数字必须小于图片高度 ({height1})")
-    else:  # left 或 right
-        if number >= width1:
-            raise ValueError(f"当方向为 '{direction}' 时，数字必须小于图片宽度 ({width1})")
+    # number 是垂直方向的像素数还是水平方向的
+    limit = h if direction in VERTICAL else w
+    if number >= limit:
+        axis = "高度" if direction in VERTICAL else "宽度"
+        raise ValueError(f"当方向为 '{direction}' 时，数字必须小于图片{axis} ({limit})")
 
-    # 根据方向进行裁剪和拼接
-    if direction == 'up':
-        # 从img1裁剪顶部部分，高度为number
-        part_a = img1.crop((0, 0, width1, number))
-        # 从img2裁剪底部部分，高度为height2 - number
-        part_b = img2.crop((0, number, width2, height2))
-        # 垂直拼接
-        result = Image.new('RGB', (width1, height1))
-        result.paste(part_a, (0, 0))
-        result.paste(part_b, (0, number))
+    if direction == "up":
+        strip, pos = img1.crop((0, 0, w, number)), (0, 0)
+    elif direction == "down":
+        strip, pos = img1.crop((0, h - number, w, h)), (0, h - number)
+    elif direction == "left":
+        strip, pos = img1.crop((0, 0, number, h)), (0, 0)
+    else:  # right
+        strip, pos = img1.crop((w - number, 0, w, h)), (w - number, 0)
 
-    elif direction == 'down':
-        # 从img1裁剪底部部分，高度为number
-        part_a = img1.crop((0, height1 - number, width1, height1))
-        # 从img2裁剪顶部部分，高度为height2 - number
-        part_b = img2.crop((0, 0, width2, height2 - number))
-        # 垂直拼接
-        result = Image.new('RGB', (width1, height1))
-        result.paste(part_b, (0, 0))
-        result.paste(part_a, (0, height2 - number))
-
-    elif direction == 'left':
-        # 从img1裁剪左侧部分，宽度为number
-        part_a = img1.crop((0, 0, number, height1))
-        # 从img2裁剪右侧部分，宽度为width2 - number
-        part_b = img2.crop((number, 0, width2, height2))
-        # 水平拼接
-        result = Image.new('RGB', (width1, height1))
-        result.paste(part_a, (0, 0))
-        result.paste(part_b, (number, 0))
-
-    elif direction == 'right':
-        # 从img1裁剪右侧部分，宽度为number
-        part_a = img1.crop((width1 - number, 0, width1, height1))
-        # 从img2裁剪左侧部分，宽度为width2 - number
-        part_b = img2.crop((0, 0, width2 - number, height2))
-        # 水平拼接
-        result = Image.new('RGB', (width1, height1))
-        result.paste(part_b, (0, 0))
-        result.paste(part_a, (width2 - number, 0))
-
+    result = img2.copy()
+    result.paste(strip, pos)
     return result
 
-def main():
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="图片裁剪与拼接工具")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("-u", "--up", action="store_true", help="向上裁剪拼接")
+    group.add_argument("-d", "--down", action="store_true", help="向下裁剪拼接")
+    group.add_argument("-l", "--left", action="store_true", help="向左裁剪拼接")
+    group.add_argument("-r", "--right", action="store_true", help="向右裁剪拼接")
+    parser.add_argument("number", type=int, help="裁剪尺寸（像素）")
+    parser.add_argument("image1", help="第一张图片路径")
+    parser.add_argument("image2", help="第二张图片路径")
+    args = parser.parse_args()
+
+    image1, image2 = Path(args.image1), Path(args.image2)
+    for p in (image1, image2):
+        if not p.is_file():
+            print(f"错误：输入的图片不存在 → {p}")
+            return 1
+
+    direction = next(
+        d for d, chosen in (
+            ("up", args.up), ("down", args.down), ("left", args.left), ("right", args.right),
+        ) if chosen
+    )
+
     try:
-        # 解析参数
-        direction, number, img1_path, img2_path = parse_args()
-
-        # 处理图片
-        result_image = process_images(direction, number, img1_path, img2_path)
-
-        # 获取输入图片的目录（使用第一张图片的目录）
-        output_dir = os.path.dirname(img1_path)
-        # 如果输入图片没有目录（当前目录），则使用当前工作目录
-        if not output_dir:
-            output_dir = os.getcwd()
-
-        # 生成输出文件名（中间产物用无损 PNG，最终交给 primage 转 avif）
-        output_filename = f"result_{direction}_{number}.png"
-        # 拼接输出路径（放在输入图片的旁边）
-        output_path = os.path.join(output_dir, output_filename)
-
-        # 保存结果
-        result_image.save(output_path)
-        print(f"处理成功！结果已保存为: {output_path}")
-
+        # 统一转 RGB，避免透明通道被丢弃
+        with Image.open(image1) as im1, Image.open(image2) as im2:
+            result = blend(im1.convert("RGB"), im2.convert("RGB"), direction, args.number)
     except Exception as e:
-        print(f"错误: {e}")
-        print(__doc__)
-        sys.exit(1)
+        print(f"错误：{e}")
+        return 1
+
+    output_path = image1.parent / f"result_{direction}_{args.number}.png"
+    result.save(output_path)
+    print(f"处理成功！结果已保存为: {output_path}")
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

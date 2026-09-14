@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from _common import is_image_file, IMAGE_EXTS
+from _common import IMAGE_EXTS, is_image_file
 
 
 def main() -> None:
@@ -53,14 +53,13 @@ def main() -> None:
     total = len(records)
 
     unmatched = sorted(name for w, name in records if w != main_width)
-    unmatched_str = "、".join(unmatched)
 
     print(f"扫描完成！共检测到 {total} 张图片")
     print("----------------------------------------")
     print(f"主流图片宽度：{main_width} 像素（共 {main_count} 张）")
 
-    if unmatched_str:
-        print(f"不符合的图片（按文件名排序）：{unmatched_str}")
+    if unmatched:
+        print(f"不符合的图片（按文件名排序）：{'、'.join(unmatched)}")
         sys.exit(1)
     else:
         print(f"所有图片宽度均为 {main_width} 像素")

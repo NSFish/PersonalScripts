@@ -1,4 +1,13 @@
-"""manga 脚本共用的小工具：图片扩展名判断、自然排序、零填充、中文数转阿拉伯。"""
+#!/usr/bin/env python3
+"""manga 脚本共用的小工具。
+
+- 图片/压缩包判断：is_image_file / is_archive_file
+- 递归收集与排序：natural_key / iter_files / list_images / list_archives
+- 隐藏文件排除：is_hidden_part / iter_files
+- 输出目录：OUTPUT_DIR_NAME / prepare_result_dir
+- primage 封装：run_primage / normalize_primage_format / primage_quality
+- 其余：pad / cn_to_arab / macOS 标签读写
+"""
 import re
 from pathlib import Path
 
@@ -68,6 +77,47 @@ def copy_mac_tags(src, dst) -> None:
             print(f"⚠️ 标签写入失败: {dst}")
     except Exception as e:
         print(f"⚠️ 标签写入失败: {dst} ({e})")
+
+
+def is_hidden_part(part: str) -> bool:
+    """路径的这一段是否该被排除：macOS 垃圾文件（.DS_Store / __MACOSX）或任意隐藏文件。"""
+    return part in EXCLUDE_HIDDEN_FILES or part.startswith(".")
+
+
+def iter_files(root):
+    """递归产出 root 下所有非隐藏文件（Path），顺序按相对路径自然排序。
+
+    排除 macOS 垃圾文件（.DS_Store / __MACOSX）与任意隐藏文件。
+    """
+    root = Path(root)
+    files = [
+        p for p in root.rglob("*")
+        if p.is_file() and not any(is_hidden_part(part) for part in p.relative_to(root).parts)
+    ]
+    return sorted(files, key=lambda p: natural_key(str(p.relative_to(root))))
+
+
+def list_images(root):
+    """列出 root 最外层的图片（按文件名自然排序）。"""
+    return sorted(
+        (p for p in Path(root).iterdir() if p.is_file() and is_image_file(p)),
+        key=lambda p: natural_key(p.name),
+    )
+
+
+def list_archives(root):
+    """列出 root 最外层的漫画压缩包（按文件名自然排序）。"""
+    return sorted(
+        (p for p in Path(root).iterdir() if p.is_file() and is_archive_file(p)),
+        key=lambda p: natural_key(p.name),
+    )
+
+
+def prepare_result_dir(src) -> Path:
+    """在输入路径旁边建好 result/ 并返回。"""
+    result_dir = Path(src).parent / OUTPUT_DIR_NAME
+    result_dir.mkdir(parents=True, exist_ok=True)
+    return result_dir
 
 
 def is_image_file(path) -> bool:

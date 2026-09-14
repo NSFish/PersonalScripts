@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """批量把 zip 压缩包内的图片转为 AVIF。
 
 已并入 convert_image_format_to.py，本脚本仅为兼容老用法的薄垫片：

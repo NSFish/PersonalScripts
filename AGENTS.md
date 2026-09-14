@@ -40,7 +40,7 @@
 ## Python 约定
 - 依赖与运行统一用 **uv**：跑脚本/测试用 `uv run --project <子项目> <命令>`；`uv.lock` 已锁定，新增依赖改 `pyproject.toml` 后让 uv 更新锁文件。
 - `manga` 是纯脚本仓库：`[tool.uv] package = false`，源码全部平铺在 `manga/src/` 下作为模块（不是包），靠 `pythonpath = ["src"]` 与 `sys.path[0]` 互相导入。
-- 公共逻辑抽到 `manga/src/_common.py`（图片扩展名判断、自然排序、零填充、中文数字转阿拉伯、macOS 标签读写）；新脚本优先复用它，不要重复造轮子。
+- 公共逻辑抽到 `manga/src/_common.py`（图片/压缩包判断、自然排序与递归收集、隐藏文件排除、`result/` 输出目录、零填充、中文数字转阿拉伯、macOS 标签读写、primage 封装）；新脚本优先复用它，不要重复造轮子。
 - 脚本入口规范：用 `argparse` 定义 CLI，函数名 `main()`，并以 `if __name__ == "__main__": main()` 收尾（见 `manga/src/jpeg_2_jpg.py`）。
 - 跨平台优先写纯 Python（pathlib 等），避免再引入 shell；很多脚本的 docstring 明确是“替代原 xxx.sh”。用户消息里允许用 emoji（✅❌💡）做终端提示。
 
@@ -64,7 +64,7 @@
 | 扩展名 .jpeg → .jpg | `manga/src/jpeg_2_jpg.py` |
 | 单张图片格式转换 | `manga/src/primage_wrapper.py` |
 | 文件夹内图片批量转格式 | `manga/src/convert_image_format_to.py` |
-| zip 内图片批量转 AVIF | `manga/src/batch_convert_image_format_inside_zip_to_avif.py` |
+| zip 内图片批量转 AVIF | `manga/src/convert_image_format_to.py avif <文件夹>`（`batch_convert_...avif.py` 是它的兼容垫片） |
 | 双页漫画裁切成单页 | `manga/src/double_page_crop.py` |
 | 两张图片拼接（韩漫） | `manga/src/page_concat.py` |
 | 图片裁剪 + 拼接 | `manga/src/page_blender.py` |
@@ -73,8 +73,7 @@
 | 一卷按章节信息拆分 | `manga/src/volume_split_into_chapters.py` |
 | 按文件名归类到章节 | `manga/src/pages_organize_into_chapters.py` |
 | 子目录文件顺序重命名 | `manga/src/chapter_pages_rename_by_order.py` |
-| 章节文件夹加顺序前缀 | `manga/src/insert_numbers_in_front_of_chapter_titles.py` |
-| 中文/阿拉伯数字序号规范化 | `manga/src/cn_numbers_rename.py` |
+| 中文/阿拉伯数字序号规范化 | `manga/src/cn_numbers_rename.py`（`--style prefix` 加顺序前缀 / `replace` 原地替换，两者均幂等；已合并原 `insert_numbers_in_front_of_chapter_titles.py`） |
 | 检查图片宽度是否一致 | `manga/src/check_page_width.py` |
 | 生成 source.txt 排序列表 | `manga/src/generate_source_file.py` |
 | OCR（macOS Vision） | `manga/src/ocr_process.py` |

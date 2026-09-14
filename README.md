@@ -10,15 +10,14 @@
 | 脚本 | 作用 |
 | --- | --- |
 | `_common.py` | 公共工具：图片扩展名判断、自然排序、零填充、中文数字转阿拉伯、macOS 标签读写 |
-| `batch_convert_image_format_inside_zip_to_avif.py` | 批量把 zip 内的图片转为 AVIF（primage 封装，-q 90） |
+| `batch_convert_image_format_inside_zip_to_avif.py` | 批量把 zip 内的图片转为 AVIF（已并入 `convert_image_format_to.py`，本脚本为兼容老用法的薄垫片） |
 | `chapter_pages_rename_by_order.py` | 递归把每个子目录里的文件按排序重命名为零填充序号 |
 | `check_page_width.py` | 扫描文件夹，统计图片主流宽度并列出不符合的图片 |
-| `cn_numbers_rename.py` | 把子文件夹名里的中文/阿拉伯数字序号规范化 |
-| `convert_image_format_to.py` | 把文件夹内图片转为指定格式（jpeg/png/webp/avif），输出到 `<文件夹>_<格式>` |
+| `cn_numbers_rename.py` | 把子文件夹名里的中文/阿拉伯数字序号规范化（`--style prefix` 加序号前缀 / `replace` 原地替换，均幂等） |
+| `convert_image_format_to.py` | 图片格式万能转换（jpeg/png/webp/avif）：单张图/图片文件夹/单个 .zip/.cbz/批量包文件夹，输出到父目录 `result/` |
 | `double_page_crop.py` | 把宽幅双页漫画图按中线裁切成左右两张单页 |
 | `generate_source_file.py` | 规范化文件名/文件夹名并生成 source.txt 排序列表 |
 | `hentai_zip_rename_inside.py` | 重新打包目录下的 zip（规范化内部结构与文件名，保留 macOS 标签） |
-| `insert_numbers_in_front_of_chapter_titles.py` | 给章节子文件夹按“第N话/条”模式加顺序前缀（幂等） |
 | `jpeg_2_jpg.py` | 递归把 .jpeg 扩展名改为 .jpg |
 | `keywords_searching.py` | 基于 OCR 结果(JSON)筛选含关键词的图片 |
 | `ocr_process.py` | 递归对子目录图片做 OCR（macOS Vision），结果存 JSON |

@@ -28,24 +28,25 @@ def load_texts(jf: Path):
 
 def process_subdir(
     ocr_sub: Path,
-    sub_name: str,
     parent_dir: Path,
     output_dir: Path,
     keywords,
     dry_run: bool,
     verbose: bool,
-) -> None:
+) -> int:
+    """处理一个子目录的 OCR 结果，返回匹配并移动的图片数。"""
+    sub_name = ocr_sub.name
     sub_dir = parent_dir / sub_name
     if not ocr_sub.is_dir():
         if verbose:
             print(f"⚠️ 跳过: {sub_name} (无OCR结果)")
-        return
+        return 0
 
     json_files = sorted(ocr_sub.glob("*.json"))
     if not json_files:
         if verbose:
             print(f"⚠️ 跳过: {sub_name} (无JSON文件)")
-        return
+        return 0
 
     matches = []
     for jf in json_files:
@@ -68,26 +69,30 @@ def process_subdir(
     if not matches:
         if verbose:
             print(f"⚠️ {sub_name} 中未找到匹配图片")
-        return
+        return 0
 
     sub_output_dir = output_dir / sub_name
     if dry_run:
         for img_path in matches:
             print(f"   预览: {img_path} -> {sub_output_dir}")
         print(f"✅ {sub_name} 中找到 {len(matches)} 张匹配图片 (dry-run，未移动)")
-        return
+        return 0
 
     sub_output_dir.mkdir(parents=True, exist_ok=True)
-    match_count = 0
+    moved = 0
     for img_path in matches:
         shutil.move(img_path, sub_output_dir)
         print(f"   匹配图片: {img_path} 已移动到 {sub_output_dir}")
-        match_count += 1
+        moved += 1
 
-    if match_count > 0:
-        new_sub_output_dir = output_dir / f"{sub_name}（{match_count}）"
-        sub_output_dir.rename(new_sub_output_dir)
-        print(f"✅ {sub_name} 中找到 {match_count} 张匹配图片")
+    # 目录名带上张数方便核对；目标已存在时保留不带计数的名字，不让它炸掉整个批量任务
+    counted_dir = output_dir / f"{sub_name}（{moved}）"
+    if counted_dir.exists():
+        print(f"⚠️ 目标目录已存在，保留原目录名: {sub_output_dir}")
+    else:
+        sub_output_dir.rename(counted_dir)
+    print(f"✅ {sub_name} 中找到 {moved} 张匹配图片")
+    return moved
 
 
 def main() -> None:
@@ -125,9 +130,12 @@ def main() -> None:
     print(f"✅ 找到 {total_dirs} 个OCR处理过的子目录")
 
     start = time.time()
+    total_matches = 0
     for processed, sub in enumerate(subdirs, 1):
         print(f"🔄 处理进度: {processed}/{total_dirs} - {sub.name}")
-        process_subdir(sub, sub.name, parent_dir, output_dir, args.keywords, args.dry_run, args.verbose)
+        total_matches += process_subdir(
+            sub, parent_dir, output_dir, args.keywords, args.dry_run, args.verbose
+        )
         print("----------------------------------------")
 
     duration = int(time.time() - start)
@@ -135,7 +143,6 @@ def main() -> None:
     print(f"处理了 {total_dirs} 个子目录")
     if not args.dry_run:
         out_dirs = sum(1 for p in output_dir.iterdir() if p.is_dir())
-        total_matches = sum(1 for p in output_dir.rglob("*") if p.is_file())
         print(f"找到 {out_dirs} 个包含匹配图片的目录")
         print(f"共找到 {total_matches} 张匹配图片")
         print(f"📁 匹配结果保存在: {output_dir}")

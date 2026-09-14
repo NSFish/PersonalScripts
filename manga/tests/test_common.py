@@ -3,7 +3,17 @@ from pathlib import Path
 
 import pytest
 
-from _common import cn_to_arab, is_image_file, natural_key, pad
+from _common import (
+    cn_to_arab,
+    is_hidden_part,
+    is_image_file,
+    iter_files,
+    list_archives,
+    list_images,
+    natural_key,
+    pad,
+    prepare_result_dir,
+)
 
 
 def test_is_image_file():
@@ -55,3 +65,50 @@ def test_mac_tags_round_trip(tmp_path):
     assert get_mac_tags(f) == ["Red"]
     assert set_mac_tags(f, []) is True   # 空列表应清除标签
     assert get_mac_tags(f) == []
+
+
+def test_is_hidden_part():
+    assert is_hidden_part(".DS_Store")
+    assert is_hidden_part("__MACOSX")
+    assert is_hidden_part(".git")          # 任意隐藏文件
+    assert not is_hidden_part("a.jpg")
+    assert not is_hidden_part("第1话")
+
+
+def test_iter_files_excludes_hidden_and_sorts(tmp_path: Path):
+    (tmp_path / "b").mkdir()
+    (tmp_path / "__MACOSX").mkdir()
+    for rel in ["10.jpg", "2.jpg", ".hidden", "b/1.jpg", "__MACOSX/._x"]:
+        (tmp_path / rel).write_text("x")
+
+    names = [str(p.relative_to(tmp_path)) for p in iter_files(tmp_path)]
+    # 按相对路径自然排序：数字段按数值比，所以 2.jpg < 10.jpg；顶层文件排在 b/ 里的前面
+    assert names == ["2.jpg", "10.jpg", "b/1.jpg"]
+
+
+def test_list_images_and_archives(tmp_path: Path):
+    (tmp_path / "p2.jpg").write_text("x")
+    (tmp_path / "p10.jpg").write_text("x")
+    (tmp_path / "b1.zip").write_text("x")
+    (tmp_path / "b2.cbz").write_text("x")
+    (tmp_path / "notes.txt").write_text("x")
+
+    assert [p.name for p in list_images(tmp_path)] == ["p2.jpg", "p10.jpg"]
+    assert [p.name for p in list_archives(tmp_path)] == ["b1.zip", "b2.cbz"]
+
+
+def test_prepare_result_dir_creates_dir(tmp_path: Path):
+    src = tmp_path / "book"
+    src.mkdir()
+
+    out = prepare_result_dir(src)
+
+    assert out == tmp_path / "result"
+    assert out.is_dir()
+
+
+def test_prepare_result_dir_idempotent(tmp_path: Path):
+    src = tmp_path / "book"
+    src.mkdir()
+
+    assert prepare_result_dir(src) == prepare_result_dir(src)  # 已存在也不报错

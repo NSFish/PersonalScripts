@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """图片格式万能转换入口（jpeg/png/webp/avif）。
 
 用法: python convert_image_format_to.py <输出格式> <输入路径>
@@ -20,13 +21,15 @@ import zipfile
 from pathlib import Path
 
 from _common import (
-    EXCLUDE_HIDDEN_FILES,
     OUTPUT_DIR_NAME,
     VALID_OUTPUT_FORMATS,
     copy_mac_tags,
     is_archive_file,
     is_image_file,
-    natural_key,
+    iter_files,
+    list_archives,
+    list_images,
+    prepare_result_dir,
     run_primage,
 )
 
@@ -55,10 +58,7 @@ def convert_image_dir(src_dir: Path, dst_dir: Path, out_format: str) -> int:
     if dst_dir.exists():
         shutil.rmtree(dst_dir)
     dst_dir.mkdir(parents=True)
-    files = sorted(
-        (p for p in src_dir.iterdir() if p.is_file() and is_image_file(p)),
-        key=lambda p: natural_key(p.name),
-    )
+    files = list_images(src_dir)
     if not files:
         print(f"ℹ️ {src_dir} 内未找到任何支持的图片，输出空文件夹")
         return 0
@@ -87,10 +87,7 @@ def convert_single_archive(src_zip: Path, dst_zip: Path, out_format: str, tag: s
         tmpdir = Path(tmp)
         with zipfile.ZipFile(src_zip) as zf:
             zf.extractall(tmpdir)
-        imgs = sorted(
-            (p for p in tmpdir.rglob("*") if p.is_file() and is_image_file(p)),
-            key=lambda p: natural_key(str(p.relative_to(tmpdir))),
-        )
+        imgs = [p for p in iter_files(tmpdir) if is_image_file(p)]
         if not imgs:
             raise ValueError(f"{src_zip.name} 内未找到任何支持的图片")
         if all(p.suffix.lower() == target for p in imgs):
@@ -114,12 +111,8 @@ def convert_single_archive(src_zip: Path, dst_zip: Path, out_format: str, tag: s
         if dst_zip.exists():
             dst_zip.unlink()
         with zipfile.ZipFile(dst_zip, "w", zipfile.ZIP_DEFLATED) as zf:
-            for p in sorted(tmpdir.rglob("*"), key=lambda x: natural_key(str(x))):
-                rel_parts = p.relative_to(tmpdir).parts
-                if any(part in EXCLUDE_HIDDEN_FILES or part.startswith(".") for part in rel_parts):
-                    continue
-                if p.is_file():
-                    zf.write(p, p.relative_to(tmpdir))
+            for p in iter_files(tmpdir):
+                zf.write(p, p.relative_to(tmpdir))
     copy_mac_tags(src_zip, dst_zip)
     print(f"✅ 打包完成: {dst_zip}")
     return "converted"
@@ -131,10 +124,7 @@ def convert_archives_batch(src_dir: Path, out_format: str) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"📁 正在处理文件夹: {src_dir}（输出到 {out_dir}）")
     failures = 0
-    archives = sorted(
-        (p for p in src_dir.iterdir() if p.is_file() and is_archive_file(p)),
-        key=lambda p: natural_key(p.name),
-    )
+    archives = list_archives(src_dir)
     if archives:
         print(f"📦 共找到 {len(archives)} 个压缩包待处理")
     for i, src in enumerate(archives, 1):
@@ -147,10 +137,7 @@ def convert_archives_batch(src_dir: Path, out_format: str) -> int:
         except subprocess.CalledProcessError as e:
             print(f"[{i}/{len(archives)}] ❌ {src.name} 处理中断: {e.stderr}")
             failures += 1
-    loose = sorted(
-        (p for p in src_dir.iterdir() if p.is_file() and is_image_file(p)),
-        key=lambda p: natural_key(p.name),
-    )
+    loose = list_images(src_dir)
     if loose:
         print(f"🖼️ 文件夹内另有 {len(loose)} 张散图，一并转换")
     target = _target_suffix(out_format)
@@ -178,14 +165,11 @@ def main(argv=None) -> int:
         print(f"❌ 输入路径不存在: {src}")
         return 1
 
+    result_dir = prepare_result_dir(src)
+
     if src.is_file():
-        result_dir = src.parent / OUTPUT_DIR_NAME
-        result_dir.mkdir(parents=True, exist_ok=True)
         if is_archive_file(src):
             dst = result_dir / f"{src.stem}.cbz"
-            if dst.resolve() == src.resolve():
-                print(f"❌ 不能转换 result 文件夹内的输出文件本身: {src}")
-                return 1
             try:
                 convert_single_archive(src, dst, out_format)
             except ValueError as e:
@@ -198,8 +182,8 @@ def main(argv=None) -> int:
         if is_image_file(src):
             dst = result_dir / f"{src.stem}{_target_suffix(out_format)}"
             if dst.exists():
-                print(f"❌ 目标文件已存在: {dst}")
-                return 1
+                # result/ 是可重建的输出目录，同名就覆盖，与文件夹分支的重建行为一致
+                print(f"ℹ️ 覆盖已有输出: {dst}")
             print(f"🖼️ 正在处理图片: {src} → {dst}")
             try:
                 convert_single_image(src, dst, out_format)
@@ -210,13 +194,7 @@ def main(argv=None) -> int:
         print(f"❌ 不支持的文件类型: {src}（仅支持图片与 .zip/.cbz）")
         return 1
 
-    result_dir = src.parent / OUTPUT_DIR_NAME
-    if src.resolve() == result_dir.resolve():
-        print(f"❌ 不能直接处理 result 文件夹本身: {src}")
-        return 1
-    result_dir.mkdir(parents=True, exist_ok=True)
-    archives = [p for p in src.iterdir() if p.is_file() and is_archive_file(p)]
-    images = [p for p in src.iterdir() if p.is_file() and is_image_file(p)]
+    archives, images = list_archives(src), list_images(src)
     if archives:
         failures = convert_archives_batch(src, out_format)
     elif images:

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """由 `just binsync` 调用：按 manga/src/*.py 生成 manga/bin/ 下的命令垫片。
 
 规则：模块名下划线转横线即命令名（如 convert_image_format_to → convert-image-format-to）；

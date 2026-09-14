@@ -10,13 +10,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-from _common import run_primage
+from _common import VALID_OUTPUT_FORMATS, run_primage
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="单张图片格式转换(primage 封装)")
     parser.add_argument("image_path", help="图片路径")
-    parser.add_argument("target_ext", nargs="?", default="jpg", help="目标扩展名(默认 jpg，无需加点)")
+    parser.add_argument(
+        "target_ext", nargs="?", default="jpg",
+        help=f"目标扩展名(默认 jpg，无需加点)；可选: {'/'.join(VALID_OUTPUT_FORMATS)}",
+    )
     args = parser.parse_args()
 
     image = Path(args.image_path).resolve()
@@ -25,8 +28,8 @@ def main() -> None:
         sys.exit(1)
 
     target_ext = args.target_ext.lstrip(".").lower()
-    if not target_ext:
-        print("错误: 目标扩展名不能为空！")
+    if target_ext not in VALID_OUTPUT_FORMATS:
+        print(f"错误: 不支持的目标格式 '{target_ext}'，可选: {'/'.join(VALID_OUTPUT_FORMATS)}")
         sys.exit(1)
 
     original_ext = image.suffix.lower().lstrip(".")
@@ -50,12 +53,11 @@ def main() -> None:
             print(f"转换取消: 目标文件已存在 → {new_path}")
             sys.exit(0)
 
-    primage_fmt = "jpeg" if target_ext == "jpg" else target_ext
     print(f"正在转换: {image} → {new_path}")
     try:
-        run_primage(image, new_path, primage_fmt)
-    except subprocess.CalledProcessError:
-        print("❌ 转换失败！")
+        run_primage(image, new_path, target_ext)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ 转换失败: {e.stderr}" if e.stderr else "❌ 转换失败！")
         sys.exit(1)
 
     print(f"✅ 转换成功！生成文件：{new_path}")
