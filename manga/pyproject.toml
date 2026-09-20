@@ -10,6 +10,7 @@ dependencies = [
     "pyobjc-framework-Vision>=11.1",
     "pyobjc-framework-Quartz>=11.1",
     "pytest>=8.0",
+    "wordfreq>=3.0",
 ]
 
 [tool.uv]
