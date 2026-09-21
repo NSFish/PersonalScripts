@@ -840,15 +840,33 @@ def test_hentai_polish_failure_produces_no_output(tmp_path: Path):
     assert (d / "1.jpg").is_file() and (d / "2.jpg").is_file()
 
 
-def test_binsync_generates_shims(tmp_path: Path):
-    run_ok("_binsync.py", "--out", str(tmp_path))
+def test_binsync_generates_all_shims(tmp_path: Path):
+    """全仓库唯一的命令生成器 tools/binsync.py（原 manga/src/_binsync.py 已并入）。"""
+    binsync = SRC.parent.parent / "tools" / "binsync.py"
+    r = subprocess.run(
+        [sys.executable, str(binsync), "--out", str(tmp_path)],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    assert r.returncode == 0, r.stderr
+
+    # manga 脚本走 uv 垫片
     shim = tmp_path / "hentai-polish"
     assert shim.is_file()
     assert shim.stat().st_mode & 0o111  # 有执行位
     text = shim.read_text(encoding="utf-8")
-    assert "hentai_polish.py" in text
+    assert "manga/src/hentai_polish.py" in text
+    assert "--project" in text and "/manga" in text
     assert '"$@"' in text
     assert "DO NOT EDIT" in text
+
+    # epub 的 python 脚本与历史 shell 脚本也统一进 bin/
+    assert "epub/src/format_xhtml.py" in (tmp_path / "format-xhtml").read_text(encoding="utf-8")
+    assert "epub/shell script/compress_epub.sh" in (
+        tmp_path / "compress-epub").read_text(encoding="utf-8")
+    # other 的零依赖脚本走 python3 直调
+    assert "other/workbuddy_checkin.py" in (
+        tmp_path / "workbuddy-checkin").read_text(encoding="utf-8")
+
     # 老别名已删除：统一用 cn-numbers-rename（replace 风格手动加 --style replace）
     assert not (tmp_path / "convert-chinese-numbers-to-arab").exists()
     assert not (tmp_path / "convert-cn-numbers-to-arab").exists()
@@ -856,3 +874,16 @@ def test_binsync_generates_shims(tmp_path: Path):
     # 下划线开头的模块不生成命令
     assert not (tmp_path / "_common").exists()
     assert not (tmp_path / "_binsync").exists()
+
+    # --check 在已同步时不报差异；改动后能检出
+    r = subprocess.run(
+        [sys.executable, str(binsync), "--out", str(tmp_path), "--check"],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    assert r.returncode == 0, r.stdout + r.stderr
+    (tmp_path / "zip-all").unlink()
+    r = subprocess.run(
+        [sys.executable, str(binsync), "--out", str(tmp_path), "--check"],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    assert r.returncode == 1

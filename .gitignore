@@ -1,1 +1,4 @@
 .DS_Store
+
+# 自动生成的全局命令垫片（just binsync 随时可重建，不入库）
+/bin/

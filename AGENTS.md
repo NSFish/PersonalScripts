@@ -35,7 +35,7 @@
 ## 工程结构
 - 多子项目仓库，互不耦合：`manga/`（漫画处理）、`epub/`（电子书处理），各自有独立的 `pyproject.toml` 与 `.python-version`（均为 3.13）。
 - 根目录的 `ffmpeg` / `ffprobe` 是官方编译版二进制，已用 `.gitattributes` 以 **git-lfs** 跟踪，不要改动或提交到普通对象。
-- `manga/bin/` 下是终端命令垫片（bash 封装 `uv run … python manga/src/xxx.py`，已在用户 `$PATH`），由 `just binsync` 按 `manga/src/*.py` 自动生成（模块名下划线转横线即命令名，下划线开头的模块不生成，带固定参数等特例写在 `manga/src/_binsync.py` 的 `EXTRA_COMMANDS` 里）；该目录 gitignore 不入库。新增/删除/重命名脚本或改垫片模板后跑一次 `just binsync`，平时改代码不用跑。
+- 全仓库只有一套全局命令机制：`just binsync`（`tools/binsync.py`）扫描 `manga/src/*.py`、`epub/src/*.py`、`epub/shell script/*.sh`、`other/*.py`，在**仓库根 `bin/`** 生成 bash 垫片（模块名下划线转横线即命令名，下划线开头的模块不生成；manga/epub 的 python 脚本走 `uv run --project`，other 走 `python3`，shell 脚本直调；`ffmpeg`/`ffprobe` 软链到根目录本体）。带固定参数等特例写在 `tools/binsync.py` 的 `EXTRA_COMMANDS` 里。用户 `$PATH` 只含 `bin/` 与仓库根两个目录。`bin/` 在根 `.gitignore` 中不入库；新增/删除/重命名脚本或改垫片模板后跑一次 `just binsync`（加 `--check` 只校验），平时改代码不用跑。不要再新增子项目各自的垫片生成器。
 
 ## Python 约定
 - 依赖与运行统一用 **uv**：跑脚本/测试用 `uv run --project <子项目> <命令>`；`uv.lock` 已锁定，新增依赖改 `pyproject.toml` 后让 uv 更新锁文件。
