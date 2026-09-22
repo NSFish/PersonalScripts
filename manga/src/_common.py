@@ -6,7 +6,7 @@
 - 隐藏文件排除：is_hidden_part / iter_files
 - 输出目录：OUTPUT_DIR_NAME / prepare_result_dir
 - primage 封装：run_primage / normalize_primage_format / primage_quality
-- 其余：pad / cn_to_arab / macOS 标签读写
+- 其余：pad / cn_to_arab / to_simplified / macOS 标签读写
 """
 import re
 from pathlib import Path
@@ -146,6 +146,32 @@ def cn_to_arab(cn: str):
         return cn2an.cn2an(cn, "normal")
     except Exception:
         return None
+
+
+_T2S_CONVERTER = None
+
+
+def to_simplified(s: str) -> str:
+    """繁体中文转简体；已是简体则原样返回（幂等）。
+
+    用 OpenCC 的 t2s（字符级），不做词汇改写：软体/计程车/档案 保持原词，
+    只把 這→这、週→周、檔→档 这类字形换掉（tw2sp 会连词一起换，超出「繁转简」）。
+    只应对**已判定为中文**的文本调用——日文标题里的汉字（如 今週）会被误换，
+    调用方需自行按语种把关。
+    opencc 缺失时原样返回，不阻断主流程。"""
+    global _T2S_CONVERTER
+    if not s:
+        return s
+    if _T2S_CONVERTER is None:
+        try:
+            from opencc import OpenCC
+        except ImportError:
+            _T2S_CONVERTER = False
+        else:
+            _T2S_CONVERTER = OpenCC("t2s")
+    if _T2S_CONVERTER is False:
+        return s
+    return _T2S_CONVERTER.convert(s)
 
 
 def get_mac_tags(path) -> list:

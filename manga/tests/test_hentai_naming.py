@@ -4,7 +4,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-from hentai_download import build_name, cleanup_title, is_hepburn_token, latin_kind, move_to_dest
+from hentai_download import (
+    build_name,
+    cleanup_title,
+    is_hepburn_token,
+    latin_kind,
+    move_to_dest,
+    split_dash_variants,
+)
 
 SRC = Path(__file__).parent.parent / "src"
 
@@ -71,6 +78,79 @@ def test_english_degrades_to_japanese():
         "tags_artist": [],
     }
     assert build_name(meta) == "となりの人妻"
+
+
+def test_split_dash_variants_drops_english_translation():
+    """「罗马音标题 - 英文译文」只留罗马音一侧。"""
+    assert split_dash_variants(
+        "Sensei, Konshuu mo Otsukaresama, desu - Sensei, Thank You For Your Hard Work This Week."
+    ) == "Sensei, Konshuu mo Otsukaresama, desu"
+    # 长破折号（en/em dash）同样识别
+    assert split_dash_variants(
+        "先生、今週もお疲れ様、です \u2014 Sensei, Thank You For Your Hard Work This Week."
+    ) == "先生、今週もお疲れ様、です"
+    assert split_dash_variants(
+        "Konshuu mo Otsukaresama \u2013 Thank You For Your Hard Work This Week"
+    ) == "Konshuu mo Otsukaresama"
+
+
+def test_split_dash_variants_keeps_unrelated_dashes():
+    """没有英文对照侧的破折号保留：纯英文标题、噪声段、单段都不动。"""
+    assert split_dash_variants("A Midsummer Night - Seduction") == "A Midsummer Night - Seduction"
+    assert split_dash_variants("Foo - Part 2") == "Foo - Part 2"
+    assert split_dash_variants("Kimi to no Mousou Sketch") == "Kimi to no Mousou Sketch"
+    assert split_dash_variants("Foo-Bar") == "Foo-Bar"  # 无空格包裹，不是分隔符
+
+
+def test_golden_dash_translation_meta():
+    """实测 meta.json：罗马音标题后跟 ' - 英文译文'，目录名去掉英文部分；
+    中文拼接段同时繁转简。"""
+    meta = {
+        "title": "[Mikeneko (simao)] Sensei, Konshuu mo Otsukaresama, desu - "
+                 "Sensei, Thank You For Your Hard Work This Week. | "
+                 "老師，這週也辛苦你了 (Blue Archive) [Chinese] [Decensored] [Digital]",
+        "originTitle": "[みけねこ (simao)] 先生、今週もお疲れ様、です (ブルーアーカイブ) "
+                       "[中国翻訳] [無修正] [DL版]",
+        "tags_artist": ["simao"],
+    }
+    assert build_name(meta) == "[simao] Sensei, Konshuu mo Otsukaresama, desu | 老师，这周也辛苦你了"
+
+
+def test_traditional_chinese_to_simplified():
+    """繁体中文标题转简体。"""
+    assert build_name({"title": "Romaji Title | 老師，這週也辛苦你了"}) == "Romaji Title | 老师，这周也辛苦你了"
+    # 中文单独作标题段时同样转
+    assert build_name({"title": "老師，這週也辛苦你了"}) == "老师，这周也辛苦你了"
+    # 繁体版本标签仍照去（去标签在转简体之前，無修正 不被简体化后漏网）
+    assert build_name({"title": "漢化組的圖書館"}) == "汉化组的图书馆"
+
+
+def test_simplified_chinese_unchanged():
+    """已是简体则保持原样（幂等），不做词汇改写（软体/档案 不变成 软件/文件）。"""
+    assert build_name({"title": "Romaji Title | 老师，这周也辛苦你了"}) == "Romaji Title | 老师，这周也辛苦你了"
+    assert build_name({"title": "Romaji Title | 软体工程师的档案"}) == "Romaji Title | 软体工程师的档案"
+
+
+def test_japanese_title_not_simplified():
+    """日文标题的汉字不能被误转：今週/週末 这类日文写法必须保持。"""
+    # 日文段（含假名）作标题
+    assert build_name({"title": "今週もお疲れ様です"}) == "今週もお疲れ様です"
+    # 日文与中文并存：日文按既有优先级占标题段（且不被简体化），中文作拼接段并被简体化
+    meta = {
+        "title": "老师，这周也辛苦你了",
+        "title_jpn": "先生、今週もお疲れ様、です",
+    }
+    assert build_name(meta) == "先生、今週もお疲れ様、です | 老师，这周也辛苦你了"
+
+
+def test_to_simplified_helper():
+    """_common.to_simplified 幂等且不动非中文。"""
+    from _common import to_simplified
+
+    assert to_simplified("老師，這週也辛苦你了") == "老师，这周也辛苦你了"
+    assert to_simplified("老师，这周也辛苦你了") == "老师，这周也辛苦你了"
+    assert to_simplified("") == ""
+    assert to_simplified("Romaji Title") == "Romaji Title"
 
 
 def test_fullwidth_pipe_and_miyabe():

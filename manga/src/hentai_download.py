@@ -30,6 +30,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _common import to_simplified
+
 try:
     from wordfreq import zipf_frequency
 except ImportError:  # 缺依赖时拉丁文退化为旧逻辑：一律按罗马音
@@ -219,6 +221,10 @@ _LANG_RANK = {"romaji": 0, "japanese": 1, "chinese": 2, "english": 3}
 # 标题片段分隔符：半角 | 与全角 ｜（U+FF5C，用 chr 写法避免源码编码问题）
 _SPLIT_RE = re.compile(r"\s*[|" + chr(0xFF5C) + r"]\s*")
 
+# 对照标题分隔符：空格包裹的 - / –(U+2013) / —(U+2014)
+# exH、comic-looms 常把「罗马音标题 - 英文译文」写在同一段里
+_DASH_SEP_RE = re.compile(r"\s+[-" + chr(0x2013) + chr(0x2014) + r"]\s+")
+
 
 def iter_title_fields(meta):
     """按 title、title_jpn、originTitle 优先，其余 title* 字段兜底，产出非空字符串。
@@ -304,29 +310,66 @@ def _author_from_bracket(bracket):
     return bracket                                  # 无 (...) 结构：整段当作者
 
 
+def split_dash_variants(seg):
+    """拆「原标题 - 英文译文」对照段，丢掉英文那半。
+
+    exH / comic-looms 的 title 常把罗马音标题与英文译文用 ' - '（或 – / —）
+    连在同一段里：
+      'Sensei, Konshuu mo Otsukaresama, desu - Sensei, Thank You For Your Hard Work This Week.'
+    整段判定只会当成一个罗马音标题，于是英文译文被带进目录名。
+    这里按分隔符切开逐段判定语种，只要**同时存在英文段与非英文段**，
+    就丢弃英文段、把其余段按原顺序接回；否则（切不开、只有一段、
+    或各段语种一致，如纯英文标题 "Foo - Part 2"）原样返回，
+    不改变既有行为。"""
+    parts = [p.strip() for p in _DASH_SEP_RE.split(seg)]
+    parts = [p for p in parts if p]
+    if len(parts) < 2:
+        return seg
+    kinds = [classify_body(p) for p in parts]
+    if "english" not in kinds:
+        return seg
+    if all(k == "english" for k in kinds):
+        return seg
+    kept = [p for p, k in zip(parts, kinds) if k != "english"]
+    return " - ".join(kept)
+
+
 def detect_title_parts(titles):
     """返回 (标题, 拼接标题)。
 
     标题按 罗马音 > 日文 > 中文 > 英文 取最优片段；
     拼接标题按 中文 > 日文 取最优（与标题去重后不同才保留，否则省略，都无则省略）。
     注意：纯拉丁段即使夹了 [Chinese]/[翻譯] 标签也要先看主体——
-    是罗马音才当标题候选，是英文则按英文退化（不再与罗马音同级）。"""
+    是罗马音才当标题候选，是英文则按英文退化（不再与罗马音同级）。
+    判定为中文的片段在**去标签之后**转简体（见 _format_title）。"""
     segments = collect_segments(titles)
-    first = {"romaji": "", "japanese": "", "chinese": "", "english": ""}
-    for seg in segments:
+    first = {}  # kind -> (原片段, kind)
+    for raw_seg in segments:
+        seg = split_dash_variants(raw_seg)
         kind = classify_body(seg)
-        if kind in first and not first[kind]:
+        if kind and kind not in first:
             first[kind] = seg
-    title_raw = next((first[k] for k in ("romaji", "japanese", "chinese", "english") if first[k]), "")
-    title_part = cleanup_title(title_raw) if title_raw else ""
+    title_raw = next((first[k] for k in ("romaji", "japanese", "chinese", "english") if k in first), "")
+    title_kind = classify_body(title_raw) if title_raw else None
+    title_part = _format_title(title_raw, title_kind) if title_raw else ""
     second_part = ""
     for k in ("chinese", "japanese"):
-        if first[k]:
-            cand = cleanup_title(first[k])
+        if k in first:
+            cand = _format_title(first[k], k)
             if cand and cand != title_part:
                 second_part = cand
                 break
     return title_part, second_part
+
+
+def _format_title(seg, kind):
+    """去标签 → 中文再繁转简。
+
+    顺序很关键：_LANG_WORDS_RE 里的标签词是繁简混合的（無修正 有、无修正 没有），
+    若先转简体，原本能被吃掉的 無修正 就吃不掉了。所以先按原文去标签，
+    只对最终中文结果做字形转换。"""
+    cleaned = cleanup_title(seg)
+    return to_simplified(cleaned) if kind == "chinese" else cleaned
 
 
 def cleanup_title(s):
