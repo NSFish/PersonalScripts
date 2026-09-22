@@ -288,6 +288,43 @@ def test_chapter_pages_rename_by_order(tmp_path: Path):
     assert '"a.jpg" -> "00.jpg"' in r.stdout  # 日志应显示原文件名
 
 
+def test_chapter_pages_rename_by_order_includes_target_dir(tmp_path: Path):
+    """目标目录自身的文件也要重命名（旧 shell 版 find "$target_dir" -type d 的语义）。"""
+    top = tmp_path / "top"
+    top.mkdir()
+    for n in ["a.jpg", "b.jpg", "c.jpg"]:
+        (top / n).write_text("x")
+
+    r = run_ok("chapter_pages_rename_by_order.py", str(top))
+    assert sorted(p.name for p in top.iterdir()) == ["00.jpg", "01.jpg", "02.jpg"]
+    assert '"a.jpg" -> "00.jpg"' in r.stdout
+
+
+def test_chapter_pages_rename_by_order_root_and_subdirs(tmp_path: Path):
+    top = tmp_path / "top"
+    sub = top / "sub"
+    sub.mkdir(parents=True)
+    for n in ["a.jpg", "b.jpg"]:
+        (top / n).write_text("x")
+        (sub / n).write_text("x")
+
+    run_ok("chapter_pages_rename_by_order.py", str(top))
+    assert sorted(p.name for p in top.iterdir() if p.is_file()) == ["00.jpg", "01.jpg"]
+    assert sorted(p.name for p in sub.iterdir()) == ["00.jpg", "01.jpg"]
+
+
+def test_chapter_pages_rename_by_order_dry_run_keeps_files(tmp_path: Path):
+    top = tmp_path / "top"
+    top.mkdir()
+    for n in ["a.jpg", "b.jpg"]:
+        (top / n).write_text("x")
+
+    r = run_ok("chapter_pages_rename_by_order.py", "-n", str(top))
+    assert sorted(p.name for p in top.iterdir()) == ["a.jpg", "b.jpg"]
+    assert "预览" in r.stdout
+    assert '"a.jpg" -> "00.jpg"' in r.stdout
+
+
 def test_pages_organize(tmp_path: Path):
     d = tmp_path / "p"
     d.mkdir()
