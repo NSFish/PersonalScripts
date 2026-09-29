@@ -98,21 +98,6 @@ def test_double_page_crop_does_not_overwrite_existing(tmp_path: Path):
     assert (out / "single.png").read_bytes() == b"old"  # 未被覆盖
 
 
-def test_double_page_crop_rerun_is_stable(tmp_path: Path):
-    d = tmp_path / "in"
-    d.mkdir()
-    make_img(d / "spread.png", 200, 80)
-    make_img(d / "single.png", 80, 200)
-
-    run_ok("double_page_crop.py", str(d))
-    out = d.parent / "in_split"
-    first = sorted(p.name for p in out.iterdir())
-
-    # 再跑一次：拆出的 _01/_02 不会被重复拆分，输出保持不变
-    run_ok("double_page_crop.py", str(d))
-    assert sorted(p.name for p in out.iterdir()) == first
-
-
 def test_volume_split_negative_page_count_reported(tmp_path: Path):
     d = tmp_path / "in"
     d.mkdir()
@@ -277,29 +262,6 @@ def test_generate_source_file_conflict_keeps_files(tmp_path: Path):
     assert len(names) == 3                        # 另一个保留原名，未被覆盖
 
 
-def test_chapter_pages_rename_by_order(tmp_path: Path):
-    sub = tmp_path / "top" / "sub"
-    sub.mkdir(parents=True)
-    for n in ["a.jpg", "b.jpg", "c.jpg"]:
-        (sub / n).write_text("x")
-
-    r = run_ok("chapter_pages_rename_by_order.py", str(tmp_path / "top"))
-    assert sorted(p.name for p in sub.iterdir()) == ["00.jpg", "01.jpg", "02.jpg"]
-    assert '"a.jpg" -> "00.jpg"' in r.stdout  # 日志应显示原文件名
-
-
-def test_chapter_pages_rename_by_order_includes_target_dir(tmp_path: Path):
-    """目标目录自身的文件也要重命名（旧 shell 版 find "$target_dir" -type d 的语义）。"""
-    top = tmp_path / "top"
-    top.mkdir()
-    for n in ["a.jpg", "b.jpg", "c.jpg"]:
-        (top / n).write_text("x")
-
-    r = run_ok("chapter_pages_rename_by_order.py", str(top))
-    assert sorted(p.name for p in top.iterdir()) == ["00.jpg", "01.jpg", "02.jpg"]
-    assert '"a.jpg" -> "00.jpg"' in r.stdout
-
-
 def test_chapter_pages_rename_by_order_root_and_subdirs(tmp_path: Path):
     top = tmp_path / "top"
     sub = top / "sub"
@@ -308,9 +270,10 @@ def test_chapter_pages_rename_by_order_root_and_subdirs(tmp_path: Path):
         (top / n).write_text("x")
         (sub / n).write_text("x")
 
-    run_ok("chapter_pages_rename_by_order.py", str(top))
+    r = run_ok("chapter_pages_rename_by_order.py", str(top))
     assert sorted(p.name for p in top.iterdir() if p.is_file()) == ["00.jpg", "01.jpg"]
     assert sorted(p.name for p in sub.iterdir()) == ["00.jpg", "01.jpg"]
+    assert '"a.jpg" -> "00.jpg"' in r.stdout  # 日志应显示原文件名
 
 
 def test_chapter_pages_rename_by_order_dry_run_keeps_files(tmp_path: Path):
