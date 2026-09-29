@@ -4,7 +4,7 @@
 用法: python hentai_rename.py <目录> [目录 ...]
 
 每个目录可以是单本子或父目录：
-- 自身有 metadata .json（gallery-dl --write-metadata 或 comic-looms 写的）→ 用它重命名；
+- 自身有 metadata .json（gallery-dl --write-info-json 或 comic-looms 写的）→ 用它重命名；
 - 没有 json 但有子目录 → 当父目录，子目录逐个重命名；
 - 否则 → 当无元数据单本，按目录现名走同一套规范化（去标签、拆作者）。
 

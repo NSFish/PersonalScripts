@@ -12,7 +12,7 @@
 - 标题来源为标题字段（title、title_jpn、originTitle 优先，其余 title* 兜底），
   每个字段先去掉开头 [...]（作者段），再按半角 | 与全角 ｜ 拆片段逐段判定语种。
 
-流程：设代理 → 临时目录 `gallery-dl -d $WORK --write-metadata` 下载
+流程：设代理 → 临时目录 `gallery-dl -d $WORK --write-info-json` 下载
 → 读每个画廊的 metadata json 重命名 → 按站点 move 到目标目录
 （默认 `~/Downloads/hentai/<site>/`）。
 
@@ -503,7 +503,7 @@ def main(argv=None) -> int:
     env.setdefault("http_proxy", PROXY)
 
     with tempfile.TemporaryDirectory(prefix="hentai-download.") as work:
-        cmd = [gallery_dl, "-d", work, "--write-metadata"]
+        cmd = [gallery_dl, "-d", work, "--write-info-json"]
         if args.range_:
             cmd += ["--range", args.range_]
         cmd += [*extra, *args.urls]
