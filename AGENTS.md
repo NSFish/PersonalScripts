@@ -78,6 +78,7 @@
 | 中文/阿拉伯数字序号规范化 | `src/cn_numbers_rename.py`（`--style prefix` 加顺序前缀 / `replace` 原地替换，两者均幂等；已合并原 `insert_numbers_in_front_of_chapter_titles.py`） |
 | 检查图片宽度是否一致 | `src/check_page_width.py` |
 | 生成 source.txt 排序列表 | `src/generate_source_file.py` |
+| 番剧/剧集按 source.txt 猜集数重命名 | `src/bangumi_rename.py`（自动从文件名猜集数，无需正则；替代 BangumiRenamer） |
 | OCR（macOS Vision） | `src/ocr_process.py` |
 | 按关键词筛选图片 | `src/keywords_searching.py` |
 | zip 重新打包/规范化 | `src/hentai_zip_rename_inside.py` |

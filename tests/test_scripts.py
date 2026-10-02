@@ -886,3 +886,181 @@ def test_binsync_generates_all_shims(tmp_path: Path):
         capture_output=True, text=True, encoding="utf-8",
     )
     assert r.returncode == 1
+
+
+# ── bangumi_rename（按 source.txt 猜集数重命名）────────────────────────────
+SOURCE_24 = "\n".join(f"{i:02d} 标题{i}" for i in range(1, 25)) + "\n"
+
+
+def _bangumi(tmp_path: Path, names: list, source: str = SOURCE_24, *extra: str):
+    """建目录 + source.txt，dry-run 跑 bangumi_rename，返回 (结果, 目录)。"""
+    d = tmp_path / "p"
+    d.mkdir()
+    for n in names:
+        (d / n).touch()
+    src = tmp_path / "source.txt"
+    src.write_text(source, encoding="utf-8")
+    return run_ok("bangumi_rename.py", "-s", str(src), "-d", str(d), "-n", *extra), d
+
+
+def test_bangumi_rename_sxxeyy(tmp_path: Path):
+    """S02E01 这类：季号 02 恒定被淘汰，CRC 里的 E1 不得误判为集数。"""
+    names = [
+        f"[LostYears] One Punch Man - S02E{i:02d} (WEB 1080p x264 10-bit AAC) [{0x3288FA84 + i:08X}].ass"
+        for i in range(1, 13)
+    ]
+    r, _ = _bangumi(tmp_path, names)
+    assert "待确认" not in r.stdout, r.stdout      # 12 个全都有把握
+    for i in range(1, 13):
+        assert f'S02E{i:02d} ' in r.stdout and f'-> "{i:02d} 标题{i}.ass"' in r.stdout, r.stdout
+
+
+def test_bangumi_rename_ep_marker(tmp_path: Path):
+    """Ep.287：Part/Vol 恒定被淘汰，选出 Ep. 后的数字。"""
+    names = [
+        "[NAOKI-Raws] 名探偵コナン／Part.11-Vol.1 Ep.001 「x」 (DVDRip x264 AC3).ass",
+        "[NAOKI-Raws] 名探偵コナン／Part.11-Vol.1 Ep.011 「x」 (DVDRip x264 AC3).ass",
+        "[NAOKI-Raws] 名探偵コナン／Part.11-Vol.1 Ep.012 「x」 (DVDRip x264 AC3).ass",
+    ]
+    r, _ = _bangumi(tmp_path, names)
+    assert "待确认" not in r.stdout, r.stdout
+    assert 'Ep.011' in r.stdout and '-> "11 标题11.ass"' in r.stdout, r.stdout
+
+
+def test_bangumi_rename_bracket_number(tmp_path: Path):
+    """[01] 孤立数字槽：分辨率 2160 与码率 10bit 都被淘汰。"""
+    names = [f"[DBD-Raws][龙珠大魔][{i:02d}][2160P][UHDBDRip][HEVC-10bit][FLAC].mkv"
+             for i in range(1, 21)]
+    r, _ = _bangumi(tmp_path, names)
+    assert "待确认" not in r.stdout, r.stdout
+    assert '-> "20 标题20.mkv"' in r.stdout, r.stdout
+
+
+def test_bangumi_rename_cn_number(tmp_path: Path):
+    """中文数字序号：转成阿拉伯后按真实集数对应，不是按字符串顺序。"""
+    names = ["[组] 番剧 第一话.mkv", "[组] 番剧 第三话.mkv", "[组] 番剧 第二话.mkv"]
+    r, _ = _bangumi(tmp_path, names)
+    assert "待确认" not in r.stdout, r.stdout
+    assert '第三话.mkv" -> "03 标题3.mkv"' in r.stdout, r.stdout
+    assert '第二话.mkv" -> "02 标题2.mkv"' in r.stdout, r.stdout
+
+
+def test_bangumi_rename_range_in_dirname(tmp_path: Path):
+    """文件名里没有可变集数（2160p 恒定）时，用目录名的 01-03 区间按顺序分配。"""
+    d = tmp_path / "[DBD-Raws][龙珠大魔][01-03TV全集][2160P][HEVC-10bit]"
+    d.mkdir()
+    for lang in ("粤语", "国语", "日语"):
+        (d / f"龙珠大魔 2160p UHDBDRip {lang}.mkv").touch()
+    src = tmp_path / "source.txt"
+    src.write_text(SOURCE_24, encoding="utf-8")
+    r = run_ok("bangumi_rename.py", "-s", str(src), "-d", str(d), "-n")
+    assert "按目录区间" in r.stdout, r.stdout
+    # 中文按 Unicode 排序：国语 < 日语 < 粤语
+    assert '国语.mkv" -> "01 标题1.mkv"' in r.stdout, r.stdout
+    assert '粤语.mkv" -> "03 标题3.mkv"' in r.stdout, r.stdout
+
+
+def test_bangumi_rename_order_mode(tmp_path: Path):
+    """--order + --start：不猜集数，按排序从指定集数开始一一对应。"""
+    names = [f"video_{i}.mkv" for i in range(1, 6)]
+    r, _ = _bangumi(tmp_path, names, SOURCE_24, "--order", "--start", "5")
+    assert 'video_1.mkv" -> "05 标题5.mkv"' in r.stdout, r.stdout
+    assert 'video_5.mkv" -> "09 标题9.mkv"' in r.stdout, r.stdout
+
+
+def test_bangumi_rename_pending_not_renamed(tmp_path: Path):
+    """没把握的默认不改名；文件名压根没数字的，--force 也无从下手。"""
+    names = ["莫名其妙的名字.mkv", "另一个没数字的.mkv"]
+    r, d = _bangumi(tmp_path, names)
+    assert "2 项待确认" in r.stdout, r.stdout
+    assert sorted(p.name for p in d.iterdir()) == sorted(names)   # 保持原名
+
+    r2 = run_ok("bangumi_rename.py", "-s", str(tmp_path / "source.txt"),
+                "-d", str(d), "-n", "--force")
+    assert "文件名无数字，无从改名" in r2.stdout, r2.stdout
+    assert "将重命名 0 项" in r2.stdout, r2.stdout   # 不能谎报已处理
+    assert "--order" in r2.stdout, r2.stdout         # 要给出可操作的下一步
+
+
+def test_bangumi_rename_force_uses_top_candidate(tmp_path: Path):
+    """--force 对「有候选但两个候选同分、不敢定夺」的项，按最高分改名。"""
+    # 两个孤立数字槽 [01] 与 [02] 同分 → margin=0 → 判定没把握
+    names = ["莫名其妙的名字.mkv", "[01] [02] mix.mkv"]
+    r, d = _bangumi(tmp_path, names)
+    assert "将重命名 0 项" in r.stdout, r.stdout      # 默认不猜
+
+    r2 = run_ok("bangumi_rename.py", "-s", str(tmp_path / "source.txt"),
+                "-d", str(d), "-n", "--force")
+    assert '"[01] [02] mix.mkv" -> "01 标题1.mkv"' in r2.stdout, r2.stdout
+    assert "将重命名 1 项" in r2.stdout, r2.stdout     # force 让它真的改了
+    assert "文件名无数字" in r2.stdout, r2.stdout     # 另一项如实报告
+
+
+def test_bangumi_rename_bracket_slot_is_confident(tmp_path: Path):
+    """单个孤立数字槽（[DBD-Raws]…[01]… 的核心特征）应自信识别，不该进待确认。"""
+    names = [f"[DBD-Raws][4K_SDR][Dragon Ball Daima][{i:02d}][2160P][UHDBDRip][HEVC-10bit][FLAC].mkv"
+             for i in range(1, 7)]
+    r, _ = _bangumi(tmp_path, names)
+    assert "待确认" not in r.stdout, r.stdout
+    assert '[01][2160P]' in r.stdout and '-> "01 标题1.mkv"' in r.stdout, r.stdout
+
+
+def test_bangumi_rename_idempotent(tmp_path: Path):
+    """实际执行后重复运行应为空操作（已对上的名字跳过）。"""
+    d = tmp_path / "p"
+    d.mkdir()
+    for i in range(1, 6):
+        (d / f"[组] 番剧 第{i}话.mkv").touch()
+    src = tmp_path / "source.txt"
+    src.write_text(SOURCE_24, encoding="utf-8")
+    run_ok("bangumi_rename.py", "-s", str(src), "-d", str(d))
+    assert sorted(p.name for p in d.iterdir()) == [f"{i:02d} 标题{i}.mkv" for i in range(1, 6)]
+
+    r = run_ok("bangumi_rename.py", "-s", str(src), "-d", str(d))
+    assert "已重命名 0 项" in r.stdout, r.stdout
+
+
+def test_bangumi_rename_unsafe_title_chars(tmp_path: Path):
+    """标题里的 / 会让 with_name 抛错，必须替换成全角。"""
+    d = tmp_path / "p"
+    d.mkdir()
+    (d / "[组] 番剧 第1话.mkv").touch()
+    src = tmp_path / "source.txt"
+    src.write_text("1 与17年前一样的案发现场 B/F\n", encoding="utf-8")
+    r = run_ok("bangumi_rename.py", "-s", str(src), "-d", str(d))
+    assert "非法字符" in r.stdout, r.stdout
+    assert (d / "1 与17年前一样的案发现场 B／F.mkv").is_file()
+
+
+def test_bangumi_rename_ext_filter_and_folders(tmp_path: Path):
+    """-e 只处理指定扩展名；--folders 处理子目录名。"""
+    d = tmp_path / "p"
+    d.mkdir()
+    (d / "[组] 番剧 第1话.mkv").touch()
+    (d / "[组] 番剧 第2话.ass").touch()
+    src = tmp_path / "source.txt"
+    src.write_text(SOURCE_24, encoding="utf-8")
+    run_ok("bangumi_rename.py", "-s", str(src), "-d", str(d), "-e", "mkv")
+    assert (d / "01 标题1.mkv").is_file()
+    assert (d / "[组] 番剧 第2话.ass").is_file()      # 未被处理
+
+    d2 = tmp_path / "q"
+    d2.mkdir()
+    (d2 / "第3话 某章").mkdir()
+    run_ok("bangumi_rename.py", "-s", str(src), "-d", str(d2), "--folders")
+    assert (d2 / "03 标题3").is_dir()
+
+
+def test_bangumi_rename_folders_recursive(tmp_path: Path):
+    """--folders + -R：子目录改名后旧路径失效，不能预先 rglob 收集（会 FileNotFoundError）。"""
+    d = tmp_path / "r"
+    for i in (1, 2):
+        (d / f"第{i}话 某章").mkdir(parents=True)
+    (d / "第3话 某章" / "inner").mkdir(parents=True)
+    src = tmp_path / "source.txt"
+    src.write_text(SOURCE_24, encoding="utf-8")
+    r = run_ok("bangumi_rename.py", "-s", str(src), "-d", str(d), "--folders", "-R")
+    assert r.returncode == 0
+    assert (d / "01 标题1").is_dir()
+    assert (d / "02 标题2").is_dir()
+    assert (d / "03 标题3" / "inner").is_dir()   # 嵌套层也遍历到，未崩
