@@ -107,14 +107,14 @@ def pad(n: int, width: int) -> str:
 
 
 def sequential_names(files: list[Path]) -> dict[Path, str]:
-    """给文件按当前顺序生成 001..N 零填充新名（保留扩展名）。
+    """按 chapter_pages_rename_by_order 的命名逻辑生成零填充序号。
 
-    对齐 chapter_pages_rename_by_order 之外的页码命名惯例
-    （hentai_polish、dbm_download 均 1 起始）：源文件名序号常有
-    空洞（Calibre 去重/跳号），直接打包会让阅读器页码映射出现缺页。
+    与该脚本一致：enumerate 从 0 起始，位宽 max(2, len(str(总数)))，
+    保留原扩展名。源文件名序号有空洞（Calibre 去重/跳号），打包前
+    统一重编成连续序号，避免阅读器页码映射缺页。
     """
-    width = max(3, len(str(len(files))))
-    return {f: f"{pad(i, width)}{f.suffix}" for i, f in enumerate(files, 1)}
+    digit = max(2, len(str(len(files))))
+    return {f: f"{pad(i, digit)}{f.suffix}" for i, f in enumerate(files)}
 
 
 def pack_cbz(base: Path, dst: Path) -> None:
