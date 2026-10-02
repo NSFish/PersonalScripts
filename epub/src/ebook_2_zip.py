@@ -101,14 +101,31 @@ def iter_pack_files(base: Path) -> list[Path]:
     return sorted(files, key=lambda p: p.relative_to(base).as_posix())
 
 
+def pad(n: int, width: int) -> str:
+    """把整数 n 零填充到 width 位。"""
+    return str(n).zfill(width)
+
+
+def sequential_names(files: list[Path]) -> dict[Path, str]:
+    """给文件按当前顺序生成 001..N 零填充新名（保留扩展名）。
+
+    对齐 chapter_pages_rename_by_order 之外的页码命名惯例
+    （hentai_polish、dbm_download 均 1 起始）：源文件名序号常有
+    空洞（Calibre 去重/跳号），直接打包会让阅读器页码映射出现缺页。
+    """
+    width = max(3, len(str(len(files))))
+    return {f: f"{pad(i, width)}{f.suffix}" for i, f in enumerate(files, 1)}
+
+
 def pack_cbz(base: Path, dst: Path) -> None:
-    """把 base 下全部文件打包为 dst（漫画阅读器按文件名排序显示）。"""
+    """把 base 下全部文件打包为 dst，按顺序重命名为 1..N 零填充。"""
     files = iter_pack_files(base)
     if not files:
         raise RuntimeError(f"{base} 里没有可打包的文件")
+    names = sequential_names(files)
     with zipfile.ZipFile(dst, "w", zipfile.ZIP_STORED) as zf:
         for f in files:
-            zf.write(f, arcname=f.relative_to(base).as_posix())
+            zf.write(f, arcname=names[f])
 
 
 def convert_one(src: Path, comic: bool) -> Path:
