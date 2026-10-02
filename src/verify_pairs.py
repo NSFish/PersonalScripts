@@ -2,7 +2,7 @@
 """双读配对复核：用修复版 table_diff 的 compare() 重跑 verify/ vs verify_mine/。
 
 背景：table-diff 的 compare() 曾长期谎报「完全一致」（差异 <12 处被吞），
-2026-10-02 已修复并有回归测试（epub/tests/test_table_diff.py）。
+2026-10-02 已修复并有回归测试（tests/test_table_diff.py）。
 当时用一次性脚本重跑了全部配对，结论写进 CONTINUE_PLAN_十年十倍.md；
 本脚本把那次的重跑逻辑固化为正式工具，供 R2 返修与后续新表复用。
 
