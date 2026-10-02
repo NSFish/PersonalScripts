@@ -4,10 +4,14 @@
 替代原 shell script/content_opf_generate.sh：纯字符串模板生成，
 不再依赖 xmlstarlet 与 uuidgen。
 
-输出与旧 shell 版**严格等价**：元数据保持空标签（dc:title 等留空由后续
-手工填写）、4 个空 dc:subject、固定 zh-CN / novel，仅 UUID 每次新生成。
+元数据保持空标签（dc:title 等留空由后续手工填写）、4 个空 dc:subject、
+固定 zh-CN / novel，与旧 shell 版一致。
 
-生成的 UUID 会同步写入已存在的 toc.ncx（dtb:uid），原文件备份为 .bak。
+UUID 幂等：已有 content.opf 或 toc.ncx 时沿用其中的 UUID（同一本书
+重复生成不换标识，阅读器进度/书签不丢），仅首次生成时随机新建。
+新 UUID 同步写入已存在的 toc.ncx（dtb:uid），不再生成 .bak 备份
+（toc.ncx 可随时由 toc_ncx_generate 重新生成，备份无意义且会被
+compress_epub 打进包里）。
 """
 import argparse
 import re
@@ -74,7 +78,7 @@ def build_opf(ids: list[str], uid: str) -> str:
 
 
 def update_toc_uid(toc_file: Path, uid: str) -> bool:
-    """把 toc.ncx 里的 dtb:uid 换成 uid，原文件备份为 .bak。返回是否成功。"""
+    """把 toc.ncx 里的 dtb:uid 换成 uid。返回是否成功。"""
     try:
         text = toc_file.read_text(encoding="utf-8")
     except OSError:
@@ -82,7 +86,8 @@ def update_toc_uid(toc_file: Path, uid: str) -> bool:
     new_text, n = UID_PATTERN.subn(rf"\g<1>{uid}\g<3>", text)
     if n == 0:
         return False
-    toc_file.with_suffix(toc_file.suffix + ".bak").write_text(text, encoding="utf-8")
+    if new_text == text:
+        return True  # uid 未变，无需写回
     toc_file.write_text(new_text, encoding="utf-8")
     return True
 
@@ -97,23 +102,38 @@ def main() -> None:
         print(f"错误: 文件夹 '{target}' 不存在")
         sys.exit(1)
 
-    # uuidgen 默认输出大写带破折号的 UUID，保持同形态
-    uid = str(uuid.uuid4()).upper()
-
     ids = list_xhtml_ids(target / "Text")
     if not ids:
         print(f"警告: 未找到Text文件夹 '{target / 'Text'}'，可能导致manifest不完整")
 
+    # C：优先复用已有 UUID——UUID 是书的唯一标识，同一本书重复生成
+    # OPF 不应换身份（否则阅读器的进度/书签会挂到"另一本书"上）。
+    # 只有首次生成（无旧 OPF/无旧 UID）才随机。
+    uid = None
     opf_file = target / "content.opf"
+    if opf_file.is_file():
+        m = re.search(
+            r'<dc:identifier[^>]*id="uuid_id"[^>]*>([^<]+)</dc:identifier>',
+            opf_file.read_text(encoding="utf-8"))
+        if m:
+            uid = m.group(1).strip()
+            print(f"沿用已有UUID: {uid}（来自旧 content.opf）")
+    if not uid and (target / "toc.ncx").is_file():
+        m = UID_PATTERN.search((target / "toc.ncx").read_text(encoding="utf-8"))
+        if m and m.group(2).strip():
+            uid = m.group(2).strip()
+            print(f"沿用已有UUID: {uid}（来自旧 toc.ncx）")
+    if not uid:
+        uid = str(uuid.uuid4()).upper()
+        print(f"生成新UUID: {uid}")
+
     opf_file.write_text(build_opf(ids, uid), encoding="utf-8")
     print(f"已生成: {opf_file}")
-    print(f"使用的UUID: {uid}")
 
     toc_file = target / "toc.ncx"
     if toc_file.is_file():
         if update_toc_uid(toc_file, uid):
             print(f"已更新toc.ncx中的UUID: {uid}")
-            print(f"原始文件备份为: {toc_file}.bak")
         else:
             print("错误: 更新toc.ncx文件失败")
             print("请检查文件格式或手动更新")
