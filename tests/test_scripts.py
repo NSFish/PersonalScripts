@@ -859,9 +859,9 @@ def test_binsync_generates_all_shims(tmp_path: Path):
     assert '"$@"' in text
     assert "DO NOT EDIT" in text
 
-    # 历史 shell 脚本直调；原 other/ 的零依赖脚本也并入 src 走 uv
+    # 原 other/ 的零依赖脚本与原 shell 脚本都并入 src 走 uv
     assert "src/format_xhtml.py" in (tmp_path / "format-xhtml").read_text(encoding="utf-8")
-    assert "shell script/compress_epub.sh" in (
+    assert "src/compress_epub.py" in (
         tmp_path / "compress-epub").read_text(encoding="utf-8")
     assert "src/workbuddy_checkin.py" in (
         tmp_path / "workbuddy-checkin").read_text(encoding="utf-8")

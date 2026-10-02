@@ -4,7 +4,8 @@
 全仓库唯一一套命令生成机制（原先各子项目分散的生成器已并入本文件）。
 来源：
 - src/*.py                  → uv 垫片（模块名下划线转横线即命令名，下划线开头跳过）
-- shell script/*.sh         → 直调垫片（去 .sh 后缀，下划线转横线）
+- shell script/*.sh         → 直调垫片（去 .sh 后缀，下划线转横线；历史脚本已全部
+                              迁移为 Python，当前该目录不存在，规则保留备用）
 - ffmpeg / ffprobe          → bin/ 下的相对软链（见 LINKED_BINARIES）
 - 默认规则表达不了的特例     → EXTRA_COMMANDS
 
