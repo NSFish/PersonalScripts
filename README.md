@@ -1,22 +1,42 @@
 # PersonalScripts
 
 - `ffmpeg` ffmpeg 官方编译版，直接拿来用省得 brew list 里一堆依赖项
-- `manga` 漫画相关，包括但不限于日漫的一卷拆分成章、重命名每一页、双页漫画的裁剪和韩漫拼接等等。OCR 走 macOS 原生 Vision 框架（pyobjc 直接调用，详见 `manga/src/ocr_process.py`），无需外部二进制
-- `epub` 电子书相关，把电子书的多余部分去掉，只保留有用内容
+- 漫画处理：日漫的一卷拆分成章、重命名每一页、双页漫画的裁剪、韩漫拼接等。OCR 走 macOS 原生 Vision 框架（pyobjc 直接调用，详见 `src/ocr_process.py`），无需外部二进制
+- 电子书处理：把电子书的多余部分去掉，只保留有用内容
+
+## 目录结构
+
+```
+src/            全部 python 脚本（平铺模块，不是包）
+shell script/   历史 shell 脚本（逐步迁移到 Python）
+resources/      脚本用的模板与静态资源
+tests/          pytest 回归测试
+tools/          工程工具（binsync 垫片生成器）
+bin/            just binsync 生成的全局命令垫片（不入库）
+```
 
 ## 脚本清单
 
-### manga（漫画处理，`manga/src/`）
+### Python（`src/`）
 | 脚本 | 作用 |
 | --- | --- |
 | `_common.py` | 公共工具：图片扩展名判断、自然排序、零填充、中文数字转阿拉伯、macOS 标签读写 |
 | `batch_convert_image_format_inside_zip_to_avif.py` | 批量把 zip 内的图片转为 AVIF（已并入 `convert_image_format_to.py`，本脚本为兼容老用法的薄垫片） |
-| `chapter_pages_rename_by_order.py` | 递归把每个子目录里的文件按排序重命名为零填充序号 |
+| `chapter_pages_rename_by_order.py` | 递归把每个子目录里的文件按排序重命名为零填充序号（命名规则唯一来源，被 `ebook_2_zip.py` 复用） |
 | `check_page_width.py` | 扫描文件夹，统计图片主流宽度并列出不符合的图片 |
 | `cn_numbers_rename.py` | 把子文件夹名里的中文/阿拉伯数字序号规范化（`--style prefix` 加序号前缀 / `replace` 原地替换，均幂等） |
 | `convert_image_format_to.py` | 图片格式万能转换（jpeg/png/webp/avif）：单张图/图片文件夹/单个 .zip/.cbz/批量包文件夹，输出到父目录 `result/` |
 | `double_page_crop.py` | 把宽幅双页漫画图按中线裁切成左右两张单页 |
+| `ebook_2_zip.py` | 把 MOBI/EPUB 转成 CBZ（漫画模式抽取 image/images 目录重新打包，支持批量与断点续跑） |
+| `edge_clean.py` | 清理 Microsoft Edge 堆积的更新备份与组件缓存 |
+| `epub_2_md.py` | 扫描版 EPUB → Markdown（Vision OCR + 按 TOC 切章） |
+| `epub_2_zip.py` | 把 EPUB 转成 CBZ/zip（抽取图片与 XHTML 重新打包） |
+| `export_cookies.py` | 导出浏览器 cookies |
+| `format_xhtml.py` | EPUB XHTML 文件格式化（文件名排序处理） |
 | `generate_source_file.py` | 规范化文件名/文件夹名并生成 source.txt 排序列表 |
+| `hentai_download.py` | 下载本子漫画 |
+| `hentai_polish.py` | 本子一键整理（数字重命名→AVIF→CBZ） |
+| `hentai_rename.py` | 本子重命名 |
 | `hentai_zip_rename_inside.py` | 重新打包目录下的 zip（规范化内部结构与文件名，保留 macOS 标签） |
 | `jpeg_2_jpg.py` | 递归把 .jpeg 扩展名改为 .jpg |
 | `keywords_searching.py` | 基于 OCR 结果(JSON)筛选含关键词的图片 |
@@ -25,19 +45,14 @@
 | `page_concat.py` | 水平/垂直拼接两张图片（韩漫拼接） |
 | `pages_organize_into_chapters.py` | 按文件名倒数第二段下划线内容把图片归类进对应子文件夹 |
 | `primage_wrapper.py` | 单张图片格式转换（primage 封装） |
+| `table_diff.py` | 表格差异对比（双读校验） |
 | `unzip_all.py` | 递归解压 .zip/.cbz，把图片抽到以压缩包命名的子文件夹 |
+| `verify_pairs.py` | 配对校验 |
 | `volume_split_into_chapters.py` | 按章节信息文件把一卷图片拆分成章节子文件夹 |
+| `workbuddy_checkin.py` | WorkBuddy / CodeBuddy CN 每日签到（零依赖） |
 | `zip_all.py` | 把每个子文件夹压缩为同名 .zip（排除 .DS_Store/__MACOSX） |
 
-### epub（电子书处理）
-#### Python（`epub/src/`）
-| 脚本 | 作用 |
-| --- | --- |
-| `epub_2_zip.py` | 把 EPUB 转成 CBZ/zip（抽取图片与 XHTML 重新打包） |
-| `ebook_2_zip.py` | 把 MOBI/EPUB 转成 CBZ（漫画模式抽取 image/images 目录重新打包，支持批量与断点续跑） |
-| `format_xhtml.py` | EPUB XHTML 文件格式化（文件名排序处理） |
-
-#### Shell（历史脚本，`epub/shell script/`，逐步迁移到 Python）
+### Shell（历史脚本，`shell script/`，逐步迁移到 Python）
 | 脚本 | 作用 |
 | --- | --- |
 | `compress_epub.sh` | 把文件夹压成合规 EPUB（mimetype 不压缩且置首） |

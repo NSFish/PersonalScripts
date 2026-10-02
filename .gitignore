@@ -3,7 +3,7 @@
 # 自动生成的全局命令垫片（just binsync 随时可重建，不入库）
 /bin/
 
-# Python 产物（各子项目共用，无需各自再写一份）
+# Python 产物
 __pycache__/
 *.py[oc]
 build/
@@ -11,3 +11,6 @@ dist/
 wheels/
 *.egg-info
 .venv
+
+# epub-2-md 之类的转换产物（含 OCR 缓存与整本书正文，不入库）
+/output/

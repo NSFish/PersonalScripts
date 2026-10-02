@@ -14,6 +14,25 @@ from _common import natural_key, pad
 TMP_PREFIX = "__rename_tmp_"
 
 
+def plan_names(files: list[Path]) -> list[tuple[Path, str]]:
+    """给排序后的文件列表规划零填充序号新名，返回 [(原路径, 新名)]。
+
+    序号从 0 起始，位宽 max(2, len(str(总数)))，保留原扩展名；
+    已经是规范名的文件不进 plan（保持幂等、汇总数字真实）。
+    被 ebook_2_zip 等脚本复用：命名规则只有这一处定义。
+    """
+    n = len(files)
+    if n == 0:
+        return []
+    digit = max(2, len(str(n)))
+    plan = []
+    for i, f in enumerate(files):
+        new_name = f"{pad(i, digit)}{f.suffix}"
+        if new_name != f.name:
+            plan.append((f, new_name))
+    return plan
+
+
 def process_directory(d: Path, dry_run: bool, verbose: bool) -> tuple[int, int]:
     """处理单个目录，返回 (成功重命名数, 失败数)。"""
     if verbose:
@@ -29,13 +48,7 @@ def process_directory(d: Path, dry_run: bool, verbose: bool) -> tuple[int, int]:
             print("  目录为空，跳过处理")
         return 0, 0
 
-    digit = max(2, len(str(n)))
-    # 序号按全部文件的位置计算，但已经是规范名的文件不再无谓改名（保持幂等、汇总数字真实）。
-    plan = []
-    for i, f in enumerate(files):
-        new_name = f"{pad(i, digit)}{f.suffix}"
-        if new_name != f.name:
-            plan.append((f, new_name))
+    plan = plan_names(files)
 
     if not plan:
         if verbose:

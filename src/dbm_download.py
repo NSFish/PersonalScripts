@@ -4,7 +4,7 @@
 只用标准库：uv run --project manga dbm-download [--chapters 1-10] [--dest 目录]
 
 流程：抓 chapters.html 解析每话的 page 链接 -> 逐页抓 page-N.html 取
-#balloonsimg 里 /image.php?...&pw=... 真图 -> 按话存入 第001话_标题/NNNN.jpg
+#balloonsimg 里 /image.php?...&pw=... 真图 -> 按话存入 001 标题/NNNN.jpg
 -> 每话打成 .cbz。支持断点续下（已存在且非空的图片跳过）。
 
 ⚠️ 站点已逐页改版为「CSS 背景图(无字原画) + HTML balloon 文字层」新格式，
@@ -13,6 +13,7 @@ dbm_fix.py（headless 浏览器渲染方案）。判断方法：下载结果出�
 等小图标即该页被污染，记下页码后用 dbm_fix.py 修复。
 """
 import argparse
+import html
 import re
 import sys
 import time
@@ -43,15 +44,17 @@ def fetch(url: str, referer: str | None = None, retries: int = 8) -> bytes:
 def get_chapters(lang: str) -> list[tuple[str, list[int]]]:
     """返回 [(话标题, [页号...]), ...]，页号按导航页顺序去重保序。"""
     url = f"{BASE}/{lang}/chapters.html?comic=page"
-    html = fetch(url).decode("utf-8", errors="ignore")
+    page = fetch(url).decode("utf-8", errors="ignore")
     out = []
-    for title, p in re.findall(r"<h4>(Chapter \d+:.*?)</h4>\s*<p>(.*?)</p>", html, re.S):
+    for title, p in re.findall(r"<h4>(Chapter \d+:.*?)</h4>\s*<p>(.*?)</p>", page, re.S):
         nums = []
         for href in re.findall(r'href="(page-(\d+)\.html)"', p):
             n = int(href[1])
             if n not in nums:
                 nums.append(n)
-        title = re.sub(r"<[^>]+>", "", title).strip()
+        # 先剥标签再反转义实体：站点标题里有 &#039; 之类的实体，
+        # 不 unescape 会把 "I'k'l" 写成 "I&#039;k&#039;l"（见第98话）。
+        title = html.unescape(re.sub(r"<[^>]+>", "", title)).strip()
         out.append((title, nums))
     return out
 
@@ -71,6 +74,24 @@ def parse_range(s: str | None, total: int) -> list[int]:
 
 
 def clean(s: str) -> str:
+    """清洗成合法目录名：非法字符替换、分数转汉字、限长。
+
+    分数形如 1/4、1/5（官网标题里的比分/分卷标记）。`/` 本会被机械替换成
+    下划线得到语义模糊的 1_4，这里转成「四分之一」更可读；不在映射里的
+    分母退回全角斜线（如 3/8 -> 3／8），仍优于下划线。
+    """
+    CN_NUM = {1: "一", 2: "二", 3: "三", 4: "四", 5: "五", 6: "六",
+              7: "七", 8: "八", 9: "九", 10: "十"}
+
+    def frac_cn(m: re.Match) -> str:
+        a, b = int(m.group(1)), int(m.group(2))
+        if a == 1 and b in CN_NUM:
+            return f"{CN_NUM[b]}分之一"
+        if b == 10 and 1 < a <= 10:  # 十分之N
+            return f"十分之{CN_NUM[a]}"
+        return f"{a}／{b}"
+
+    s = re.sub(r"(\d+)\s*/\s*(\d+)", frac_cn, s)
     return re.sub(r'[/\\:*?"<>|]', "_", s).strip()[:100]
 
 
@@ -91,7 +112,7 @@ def main() -> None:
 
     for idx in parse_range(args.chapters, len(chapters)):
         title, pages = chapters[idx - 1]
-        dirname = f"第{idx:03d}话_{clean(title)}"
+        dirname = f"{idx:03d} {clean(title)}"
         d = dest / dirname
         d.mkdir(exist_ok=True)
         ok = 0

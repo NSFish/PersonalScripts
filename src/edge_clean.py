@@ -10,9 +10,9 @@ edge_clean.py — 清理 Microsoft Edge 在本地堆积的更新备份与组件�
   EdgeUpdater/updater.log.old、updater_history.jsonl.old
 
 用法：
-  python3 other/edge_clean.py              # 要求先退出 Edge，直接清理
-  python3 other/edge_clean.py --dry-run    # 只列出将删除项与可释放空间
-  python3 other/edge_clean.py --force      # Edge 运行中也照常清理（不推荐）
+  python3 src/edge_clean.py              # 要求先退出 Edge，直接清理
+  python3 src/edge_clean.py --dry-run    # 只列出将删除项与可释放空间
+  python3 src/edge_clean.py --force      # Edge 运行中也照常清理（不推荐）
 """
 import argparse
 import plistlib

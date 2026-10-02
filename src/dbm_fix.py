@@ -145,8 +145,12 @@ def crop_comic(png: Path, w: int, h: int, out: Path) -> None:
 
 
 def target_path(page: int) -> Path | None:
-    """找到该页对应的 第NNN话/PPPP.jpg"""
-    for d in DEST_ROOT.glob("第*话*"):
+    """找到该页对应的 001 标题/PPPP.jpg
+
+    两种目录名格式都兼容：现行「NNN 标题」（dbm_download 当前输出）与
+    历史遗留「第NNN话_Chapter N_ 标题」。
+    """
+    for d in sorted(DEST_ROOT.iterdir()):
         if not d.is_dir():
             continue
         f = d / f"{page:04d}.jpg"

@@ -1,6 +1,6 @@
 """manga 脚本的功能回归测试：用临时目录真实运行各脚本，校验输出。
 
-通过 subprocess 调用 venv 内的 python（即运行 pytest 的解释器）执行 manga/src 下的脚本，
+通过 subprocess 调用 venv 内的 python（即运行 pytest 的解释器）执行 src 下的脚本，
 脚本内 `from _common import ...` 因脚本目录在 sys.path[0] 而可用。
 """
 import json
@@ -841,30 +841,29 @@ def test_hentai_polish_failure_produces_no_output(tmp_path: Path):
 
 
 def test_binsync_generates_all_shims(tmp_path: Path):
-    """全仓库唯一的命令生成器 tools/binsync.py（原 manga/src/_binsync.py 已并入）。"""
-    binsync = SRC.parent.parent / "tools" / "binsync.py"
+    """全仓库唯一的命令生成器 tools/binsync.py（各子项目分散的生成器已并入）。"""
+    binsync = SRC.parent / "tools" / "binsync.py"
     r = subprocess.run(
         [sys.executable, str(binsync), "--out", str(tmp_path)],
         capture_output=True, text=True, encoding="utf-8",
     )
     assert r.returncode == 0, r.stderr
 
-    # manga 脚本走 uv 垫片
+    # src/ 下的 python 脚本统一走 uv 垫片
     shim = tmp_path / "hentai-polish"
     assert shim.is_file()
     assert shim.stat().st_mode & 0o111  # 有执行位
     text = shim.read_text(encoding="utf-8")
-    assert "manga/src/hentai_polish.py" in text
-    assert "--project" in text and "/manga" in text
+    assert "src/hentai_polish.py" in text
+    assert "--project" in text
     assert '"$@"' in text
     assert "DO NOT EDIT" in text
 
-    # epub 的 python 脚本与历史 shell 脚本也统一进 bin/
-    assert "epub/src/format_xhtml.py" in (tmp_path / "format-xhtml").read_text(encoding="utf-8")
-    assert "epub/shell script/compress_epub.sh" in (
+    # 历史 shell 脚本直调；原 other/ 的零依赖脚本也并入 src 走 uv
+    assert "src/format_xhtml.py" in (tmp_path / "format-xhtml").read_text(encoding="utf-8")
+    assert "shell script/compress_epub.sh" in (
         tmp_path / "compress-epub").read_text(encoding="utf-8")
-    # other 的零依赖脚本走 python3 直调
-    assert "other/workbuddy_checkin.py" in (
+    assert "src/workbuddy_checkin.py" in (
         tmp_path / "workbuddy-checkin").read_text(encoding="utf-8")
 
     # 老别名已删除：统一用 cn-numbers-rename（replace 风格手动加 --style replace）

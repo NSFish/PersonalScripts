@@ -20,6 +20,8 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+from chapter_pages_rename_by_order import plan_names
+
 # Calibre 命令行的常见位置：PATH 之外再兜底 macOS 默认安装路径
 EBOOK_CONVERT_FALLBACKS = (
     "/Applications/calibre.app/Contents/MacOS/ebook-convert",
@@ -101,31 +103,20 @@ def iter_pack_files(base: Path) -> list[Path]:
     return sorted(files, key=lambda p: p.relative_to(base).as_posix())
 
 
-def pad(n: int, width: int) -> str:
-    """把整数 n 零填充到 width 位。"""
-    return str(n).zfill(width)
-
-
-def sequential_names(files: list[Path]) -> dict[Path, str]:
-    """按 chapter_pages_rename_by_order 的命名逻辑生成零填充序号。
-
-    与该脚本一致：enumerate 从 0 起始，位宽 max(2, len(str(总数)))，
-    保留原扩展名。源文件名序号有空洞（Calibre 去重/跳号），打包前
-    统一重编成连续序号，避免阅读器页码映射缺页。
-    """
-    digit = max(2, len(str(len(files))))
-    return {f: f"{pad(i, digit)}{f.suffix}" for i, f in enumerate(files)}
-
-
 def pack_cbz(base: Path, dst: Path) -> None:
-    """把 base 下全部文件打包为 dst，按顺序重命名为 1..N 零填充。"""
+    """把 base 下全部文件打包为 dst，页码名沿用 chapter_pages_rename_by_order。
+
+    Calibre 转换出的图片序号常有空洞（去重/跳号），直接打包会让阅读器
+    页码映射缺页，所以打包时统一按该脚本的规则重排成连续序号。
+    """
     files = iter_pack_files(base)
     if not files:
         raise RuntimeError(f"{base} 里没有可打包的文件")
-    names = sequential_names(files)
+    # 复用唯一一份命名规则：plan_names 只返回「需要改名」的项，其余沿用原名
+    renamed = dict(plan_names(files))
     with zipfile.ZipFile(dst, "w", zipfile.ZIP_STORED) as zf:
         for f in files:
-            zf.write(f, arcname=names[f])
+            zf.write(f, arcname=renamed.get(f, f.name))
 
 
 def convert_one(src: Path, comic: bool) -> Path:

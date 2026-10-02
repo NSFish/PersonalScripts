@@ -1,5 +1,5 @@
 [project]
-name = "manga"
+name = "personal-scripts"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
@@ -14,8 +14,13 @@ dependencies = [
     "wordfreq>=3.0",
 ]
 
+[project.scripts]
+epub-to-zip = "epub_2_zip:main"
+ebook-to-zip = "ebook_2_zip:main"
+format-xhtml = "format_xhtml:main"
+
 [tool.uv]
-# 纯脚本仓库：源码全是平铺模块，不作为包安装；测试/脚本靠 pythonpath 和 sys.path[0] 导入
+# 纯脚本仓库：源码全部平铺在 src/ 下作为模块（不是包），靠 pythonpath 与 sys.path[0] 互相导入
 package = false
 
 [tool.pytest.ini_options]
