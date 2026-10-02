@@ -8,7 +8,6 @@
 
 ```
 src/            全部 python 脚本（平铺模块，不是包）
-shell script/   历史 shell 脚本（逐步迁移到 Python）
 resources/      脚本用的模板与静态资源
 tests/          pytest 回归测试
 tools/          工程工具（binsync 垫片生成器）
@@ -20,6 +19,9 @@ bin/            just binsync 生成的全局命令垫片（不入库）
 ### Python（`src/`）
 | 脚本 | 作用 |
 | --- | --- |
+| `compress_epub.py` | 把文件夹压成合规 EPUB（mimetype 不压缩且置首） |
+| `content_opf_generate.py` | 生成 EPUB 的 `content.opf`（manifest + spine，元数据留空待填） |
+| `toc_ncx_generate.py` | 扫描 xhtml 生成 EPUB 的 `toc.ncx`（按卷/部/番外/章分层） |
 | `_common.py` | 公共工具：图片扩展名判断、自然排序、零填充、中文数字转阿拉伯、macOS 标签读写 |
 | `batch_convert_image_format_inside_zip_to_avif.py` | 批量把 zip 内的图片转为 AVIF（已并入 `convert_image_format_to.py`，本脚本为兼容老用法的薄垫片） |
 | `chapter_pages_rename_by_order.py` | 递归把每个子目录里的文件按排序重命名为零填充序号（命名规则唯一来源，被 `ebook_2_zip.py` 复用） |
@@ -52,9 +54,3 @@ bin/            just binsync 生成的全局命令垫片（不入库）
 | `workbuddy_checkin.py` | WorkBuddy / CodeBuddy CN 每日签到（零依赖） |
 | `zip_all.py` | 把每个子文件夹压缩为同名 .zip（排除 .DS_Store/__MACOSX） |
 
-### Shell（历史脚本，`shell script/`，逐步迁移到 Python）
-| 脚本 | 作用 |
-| --- | --- |
-| `compress_epub.sh` | 把文件夹压成合规 EPUB（mimetype 不压缩且置首） |
-| `content_opf_generate.sh` | 生成 `content.opf` |
-| `toc_ncx_generate.sh` | 生成 `toc.ncx` |

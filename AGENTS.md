@@ -34,9 +34,9 @@
 
 ## 工程结构
 - **单项目仓库**（原先 manga/ 与 epub/ 两个子项目已合并）：根 `pyproject.toml` + `uv.lock` 统一管理，Python 3.13。
-  所有脚本平铺在 `src/`、历史 shell 脚本在 `shell script/`、模板资源在 `resources/`、回归测试在 `tests/`、工程工具在 `tools/`。
+  全部脚本平铺在 `src/`（历史 shell 脚本已迁移完毕）、模板资源在 `resources/`、回归测试在 `tests/`、工程工具在 `tools/`。
 - 根目录的 `ffmpeg` / `ffprobe` 是官方编译版二进制，已用 `.gitattributes` 以 **git-lfs** 跟踪，不要改动或提交到普通对象。
-- 全仓库只有一套全局命令机制：`just binsync`（`tools/binsync.py`）扫描 `src/*.py` 与 `shell script/*.sh`，在**仓库根 `bin/`** 生成 bash 垫片（模块名下划线转横线即命令名，下划线开头的模块不生成；python 脚本走 `uv run --project`，shell 脚本直调；`ffmpeg`/`ffprobe` 软链到根目录本体）。带固定参数等特例写在 `tools/binsync.py` 的 `EXTRA_COMMANDS` 里。用户 `$PATH` 只含 `bin/` 与仓库根两个目录。`bin/` 在根 `.gitignore` 中不入库；新增/删除/重命名脚本或改垫片模板后跑一次 `just binsync`（加 `--check` 只校验），平时改代码不用跑。
+- 全仓库只有一套全局命令机制：`just binsync`（`tools/binsync.py`）扫描 `src/*.py`（`shell script/*.sh` 规则保留备用，当前无 shell 脚本），在**仓库根 `bin/`** 生成 bash 垫片（模块名下划线转横线即命令名，下划线开头的模块不生成；python 脚本走 `uv run --project`，shell 脚本直调；`ffmpeg`/`ffprobe` 软链到根目录本体）。带固定参数等特例写在 `tools/binsync.py` 的 `EXTRA_COMMANDS` 里。用户 `$PATH` 只含 `bin/` 与仓库根两个目录。`bin/` 在根 `.gitignore` 中不入库；新增/删除/重命名脚本或改垫片模板后跑一次 `just binsync`（加 `--check` 只校验），平时改代码不用跑。
 
 ## Python 约定
 - 依赖与运行统一用 **uv**：跑脚本/测试用 `uv run <命令>`；`uv.lock` 已锁定，新增依赖改根 `pyproject.toml` 后让 uv 更新锁文件。
@@ -51,7 +51,7 @@
 - 运行全部测试：`just test`；项目有 `justfile` 时优先 `just <任务>`。
 
 ## Shell 脚本约定
-- `shell script/` 下是历史 shell 脚本，shebang 固定为 `#!/opt/homebrew/bin/bash`，未使用 `set -e`；改这些脚本时保留 homebrew bash 路径。
+- 历史 shell 脚本已全部迁移为 Python（`shell script/` 已取消）。再新增能力一律写 Python，不要新增 shell。
 - 新建能力优先用上面的 Python 约定，而非新增 shell 脚本。
 
 ## macOS 特性
@@ -85,5 +85,8 @@
 | EPUB → CBZ/zip | `src/epub_2_zip.py` |
 | MOBI/EPUB → CBZ（电子书转漫画包） | `src/ebook_2_zip.py` |
 | EPUB XHTML 格式化 | `src/format_xhtml.py` |
+| 文件夹 → 合规 EPUB（mimetype 不压缩置首） | `src/compress_epub.py` |
+| 生成 EPUB 的 content.opf | `src/content_opf_generate.py` |
+| 生成 EPUB 的 toc.ncx（卷/章导航） | `src/toc_ncx_generate.py` |
 
 > 公共逻辑一律走 `src/_common.py`；需要新能力时先复用上面脚本再扩展。
