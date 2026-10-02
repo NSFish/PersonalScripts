@@ -34,6 +34,7 @@
 | 脚本 | 作用 |
 | --- | --- |
 | `epub_2_zip.py` | 把 EPUB 转成 CBZ/zip（抽取图片与 XHTML 重新打包） |
+| `ebook_2_zip.py` | 把 MOBI/EPUB 转成 CBZ（漫画模式抽取 image/images 目录重新打包，支持批量与断点续跑） |
 | `format_xhtml.py` | EPUB XHTML 文件格式化（文件名排序处理） |
 
 #### Shell（历史脚本，`epub/shell script/`，逐步迁移到 Python）
@@ -41,5 +42,4 @@
 | --- | --- |
 | `compress_epub.sh` | 把文件夹压成合规 EPUB（mimetype 不压缩且置首） |
 | `content_opf_generate.sh` | 生成 `content.opf` |
-| `ebook_2_zip.sh` | 电子书转 zip |
 | `toc_ncx_generate.sh` | 生成 `toc.ncx` |

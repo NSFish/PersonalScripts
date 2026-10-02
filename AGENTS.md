@@ -81,6 +81,7 @@
 | zip 重新打包/规范化 | `manga/src/hentai_zip_rename_inside.py` |
 | 本子一键整理（数字重命名→AVIF→CBZ） | `manga/src/hentai_polish.py` |
 | EPUB → CBZ/zip | `epub/src/epub_2_zip.py` |
+| MOBI/EPUB → CBZ（电子书转漫画包） | `epub/src/ebook_2_zip.py` |
 | EPUB XHTML 格式化 | `epub/src/format_xhtml.py` |
 
 > 公共逻辑一律走 `manga/src/_common.py`；需要新能力时先复用上面脚本再扩展。
