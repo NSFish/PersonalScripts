@@ -33,7 +33,7 @@
 - 仅当需要生成跨平台脚本（给其他系统用）时，才考虑 POSIX 标准的 `grep/find`，否则默认 `rg/fd`。
 
 ## 工程结构
-- **单项目仓库**（原先 manga/ 与 epub/ 两个子项目已合并）：根 `pyproject.toml` + `uv.lock` 统一管理，Python 3.13。
+- **单项目仓库**（原先 manga/ 与 epub/ 两个子项目已合并）：根 `pyproject.toml` + `uv.lock` 统一管理，Python ≥3.13（`.python-version` 只定下限，实际跟随 Homebrew 的解释器，不用 uv 自托管版本）。
   全部脚本平铺在 `src/`（历史 shell 脚本已迁移完毕）、模板资源在 `resources/`、回归测试在 `tests/`、工程工具在 `tools/`。
 - 根目录的 `ffmpeg` / `ffprobe` 是官方编译版二进制，已用 `.gitattributes` 以 **git-lfs** 跟踪，不要改动或提交到普通对象。
 - 全仓库只有一套全局命令机制：`just binsync`（`tools/binsync.py`）扫描 `src/*.py`（`shell script/*.sh` 规则保留备用，当前无 shell 脚本），在**仓库根 `bin/`** 生成 bash 垫片（模块名下划线转横线即命令名，下划线开头的模块不生成；python 脚本走 `uv run --project`，shell 脚本直调；`ffmpeg`/`ffprobe` 软链到根目录本体）。带固定参数等特例写在 `tools/binsync.py` 的 `EXTRA_COMMANDS` 里。用户 `$PATH` 只含 `bin/` 与仓库根两个目录。`bin/` 在根 `.gitignore` 中不入库；新增/删除/重命名脚本或改垫片模板后跑一次 `just binsync`（加 `--check` 只校验），平时改代码不用跑。
