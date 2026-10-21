@@ -41,6 +41,7 @@ bin/            just binsync 生成的全局命令垫片（不入库）
 | `hentai_rename.py` | 本子重命名 |
 | `hentai_zip_rename_inside.py` | 重新打包目录下的 zip（规范化内部结构与文件名，保留 macOS 标签） |
 | `jpeg_2_jpg.py` | 递归把 .jpeg 扩展名改为 .jpg |
+| `local_network_clean.py` | 清理 macOS「隐私与安全性 > 本地网络」里堆积的残留条目（该权限存在 NetworkExtension 的 network privacy 配置里，不在 TCC，`tccutil` 重置不了） |
 | `keywords_searching.py` | 基于 OCR 结果(JSON)筛选含关键词的图片 |
 | `ocr_process.py` | 递归对子目录图片做 OCR（macOS Vision），结果存 JSON |
 | `page_blender.py` | 图片裁剪与拼接 |
