@@ -53,8 +53,15 @@ RANGE_RE = re.compile(r"(?<![0-9])(\d{1,3})\s*[-~—－]\s*(\d{1,3})(?![0-9])")
 CRC_RE = re.compile(r"\b(?=[0-9A-Za-z]*\d)(?=[0-9A-Za-z]*[A-Fa-f])[0-9A-Fa-f]{8,}\b")
 # 行首数字 = 集数，其余是标题
 SOURCE_LINE_RE = re.compile(r"^\s*(\d+)\s*(.*)$")
-# 不能进文件名的字符：路径分隔符 + Windows 保留字符（柯南清单里有 B/F/S 这类标记）
-UNSAFE_CHARS = re.compile(r"[/\\:*?\"<>|]")
+# 不能进文件名的字符：只认 macOS 真正存不下的那个（/ 是路径分隔符，写进去
+# with_name 直接抛 ValueError）。换成全角 ／，视觉上还是斜杠，最接近原意。
+#
+# 注意 \ : * ? " < > | 在 APFS 上都能存（实测：只有 / 会 OSError），
+# 所以**不**替换它们：替了只是白白丢掉标题原貌（「对决: 真相」被拍成「对决_ 真相」）。
+# 幂等不受影响——source 与磁盘名两侧走的是同一个替换，改名后照样能对上跳过。
+# 唯一要留意的是 : —— Finder 会把它显示成 /（HFS+ 遗留的显示层转换，磁盘上仍是冒号），
+# 但脚本和终端看到的都是 :，按标题原样保留。
+UNSAFE_CHARS = re.compile(r"/")
 
 # 剥前缀/后缀时当作分隔符跳过的字符（不含 #，见下）
 SEP_CHARS = " \t-_.[]{}【】()（）+&=~'\"!"
@@ -126,11 +133,14 @@ def parse_source(path: Path) -> tuple[dict, int]:
         if number in source:
             print(f"⚠️ source.txt 里集数 {number} 重复，保留先出现的那行")
             continue
-        # 标题里的 / 等字符会让 with_name 直接抛错：/ 换成全角，其余换成 _
-        safe = UNSAFE_CHARS.sub(lambda c: "／" if c.group() == "/" else "＼" if c.group() == "\\" else "_", raw)
-        if safe != raw:
-            print(f"⚠️ 标题含非法字符，已替换: {raw} -> {safe}")
-        source[number] = safe if m else f"{number} {title}"
+        # 标题里的 / 会让 with_name 直接抛错，换成全角 ／。
+        # 必须先拼出最终那一行再清洗：行首无数字的分支同样会落到文件名里，
+        # 只洗 m 分支的话，无数字行照样带着 / 抛错（警告还会误导说已替换）。
+        line = raw if m else f"{number} {title}"
+        safe = UNSAFE_CHARS.sub("／", line)
+        if safe != line:
+            print(f"⚠️ 标题含 / 无法进文件名，已换成全角: {line} -> {safe}")
+        source[number] = safe
         last = number
     if not source:
         raise ValueError(f"source.txt 里没解析出任何条目: {path}")
@@ -200,6 +210,21 @@ def detect_range(text: str):
         if end >= start:
             return start, end
     return None
+
+
+def stem_of(p: Path, folders: bool) -> str:
+    """取用于猜集数的名字主干。
+
+    --folders 时**必须**用完整目录名而不是 Path.stem：目录名里的点不是扩展名
+    （`Vol.1` 的 stem 是 `Vol`、`Ep.07` 的 stem 是 `Ep`），按 stem 走会把集数
+    整个丢掉，还会把 `.1`/`.07` 当成后缀拼到新名上（`Vol.1` -> `1 标题1.1`）。
+    """
+    return p.name if folders else p.stem
+
+
+def suffix_of(p: Path, folders: bool) -> str:
+    """拼到新名上的尾部：--folders 时目录没有扩展名，拼空串。"""
+    return "" if folders else p.suffix
 
 
 # ── 打分 ──────────────────────────────────────────────────────────────────
@@ -316,10 +341,10 @@ def slot_scores(stems: list, valid: set) -> dict:
     return scores
 
 
-def analyze(paths: list, source: dict, width: int) -> list:
+def analyze(paths: list, source: dict, width: int, folders: bool = False) -> list:
     """给一批条目判定集数，返回 [Pick]。"""
     valid, max_num = set(source), max(source)
-    stems = [clean_stem(p.stem) for p in paths]
+    stems = [clean_stem(stem_of(p, folders)) for p in paths]
     slots = slot_scores(stems, valid)
     picks = []
     for path, stem in zip(paths, stems):
@@ -386,7 +411,7 @@ def entries_in(d: Path, folders: bool, exts: set, source: dict, exclude: Path) -
                  and (not exts or p.suffix.lower().lstrip(".") in exts)
                  # 未指定 -e 时跳过清单类文件；-e 显式列了才处理
                  and (exts or p.suffix.lower() not in SKIP_EXTS))
-    return sorted((p for p in items if p.stem not in done),
+    return sorted((p for p in items if stem_of(p, folders) not in done),
                   key=lambda p: natural_key(p.name))
 
 
@@ -396,7 +421,7 @@ def plan_order(paths: list, start: int) -> list:
 
 
 def resolve_picks(entries: list, d: Path, source: dict, width: int,
-                  order: bool, start: int, force: bool) -> list:
+                  folders: bool, order: bool, start: int, force: bool) -> list:
     """判定这批条目的集数。全部猜不出时按目录名区间兜底。
 
     force 要在这里就生效，不能等到 process_dir：analyze 会把不自信的 number 置 0，
@@ -405,7 +430,7 @@ def resolve_picks(entries: list, d: Path, source: dict, width: int,
     """
     if order:
         return plan_order(entries, start)
-    picks = analyze(entries, source, width)
+    picks = analyze(entries, source, width, folders)
     if force:
         # 认最高分候选；文件名压根没数字的保持 0（无从下手）
         for p in picks:
@@ -423,7 +448,7 @@ def resolve_picks(entries: list, d: Path, source: dict, width: int,
     return picks
 
 
-def build_plan(picks: list, source: dict) -> tuple:
+def build_plan(picks: list, source: dict, folders: bool = False) -> tuple:
     """把 Pick 落成 [(原路径, 新路径)]，返回 (计划, 未处理清单)。
 
     同一集数 + 同扩展名只认第一个（番剧常有多种字幕/音轨共存，重名会互相覆盖）。
@@ -434,9 +459,9 @@ def build_plan(picks: list, source: dict) -> tuple:
         if not pick.number or pick.number not in source:
             missing.append(pick)
             continue
-        new_name = source[pick.number] + pick.path.suffix
+        new_name = source[pick.number] + suffix_of(pick.path, folders)
         dst = pick.path.with_name(new_name)
-        key = (pick.number, pick.path.suffix.lower())
+        key = (pick.number, suffix_of(pick.path, folders).lower())
         if key in used:
             print(f"❌ 集数 {pick.number} 重复，跳过: {pick.path.name}"
                   f"（已由 {used[key].name} 占用）")
@@ -485,13 +510,13 @@ def process_dir(d: Path, source: dict, width: int, folders: bool, exts: set,
     if not entries:
         return 0, 0, 0
 
-    picks = resolve_picks(entries, d, source, width, order, start, force)
+    picks = resolve_picks(entries, d, source, width, folders, order, start, force)
     if not force:
         for p in picks:
             if not p.confident:
                 p.number = 0  # 没把握的不进改名计划
 
-    plan, missing = build_plan(picks, source)
+    plan, missing = build_plan(picks, source, folders)
 
     if verbose:
         print(f"\n🔍 {d}")
