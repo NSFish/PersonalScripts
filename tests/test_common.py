@@ -1,10 +1,14 @@
 """_common 公共函数的单元测试。"""
+import struct
+import zipfile
 from pathlib import Path
 
 import pytest
 
 from _common import (
     cn_to_arab,
+    extract_zip,
+    fix_zip_filename,
     is_hidden_part,
     is_image_file,
     iter_files,
@@ -14,6 +18,29 @@ from _common import (
     pad,
     prepare_result_dir,
 )
+
+
+def make_bad_zip(src_zip: Path, dst_zip: Path) -> None:
+    """把好包两处（local + central）的 UTF-8 标记清零，模拟缺标记的压包工具。
+
+    注意 local 头的 flag 在签名后 +6，central 的在 +8（+8 在 local 头是压缩方法）。
+    """
+    data = bytearray(src_zip.read_bytes())
+    i = 0
+    while True:
+        i = data.find(b"PK\x03\x04", i)
+        if i < 0:
+            break
+        struct.pack_into("<H", data, i + 6, struct.unpack_from("<H", data, i + 6)[0] & ~0x800)
+        i += 4
+    i = 0
+    while True:
+        i = data.find(b"PK\x01\x02", i)
+        if i < 0:
+            break
+        struct.pack_into("<H", data, i + 8, struct.unpack_from("<H", data, i + 8)[0] & ~0x800)
+        i += 4
+    dst_zip.write_bytes(data)
 
 
 def test_is_image_file():
@@ -112,3 +139,48 @@ def test_prepare_result_dir_idempotent(tmp_path: Path):
     src.mkdir()
 
     assert prepare_result_dir(src) == prepare_result_dir(src)  # 已存在也不报错
+
+
+def test_fix_zip_filename_missing_utf8_flag(tmp_path: Path):
+    """缺 UTF-8 标记的中文包：zipfile 按 cp437 解出乱码，fix 应恢复中文。"""
+    good = tmp_path / "good.zip"
+    with zipfile.ZipFile(good, "w") as zf:
+        zf.writestr("01 刑期二十年/00.jpg", b"x")
+    bad = tmp_path / "bad.zip"
+    make_bad_zip(good, bad)
+
+    with zipfile.ZipFile(bad) as zf:
+        info = zf.infolist()[0]
+        assert info.flag_bits == 0
+        assert info.filename != "01 刑期二十年/00.jpg"  # 确认复现出乱码
+        assert fix_zip_filename(info) == "01 刑期二十年/00.jpg"
+
+
+def test_fix_zip_filename_leaves_good_entries_alone(tmp_path: Path):
+    """标记正常的包与纯 ASCII 名：fix 应原样返回。"""
+    good = tmp_path / "good.zip"
+    with zipfile.ZipFile(good, "w") as zf:
+        zf.writestr("01 刑期二十年/00.jpg", b"x")
+        zf.writestr("plain/01.jpg", b"x")
+
+    with zipfile.ZipFile(good) as zf:
+        for info in zf.infolist():
+            assert fix_zip_filename(info) == info.filename
+
+
+def test_extract_zip_fixes_names_and_blocks_traversal(tmp_path: Path):
+    good = tmp_path / "good.zip"
+    with zipfile.ZipFile(good, "w") as zf:
+        zf.writestr("01 刑期二十年/00.jpg", b"x")
+        zf.writestr("../evil.txt", b"x")
+        zf.writestr("/abs.txt", b"x")
+    bad = tmp_path / "bad.zip"
+    make_bad_zip(good, bad)
+
+    out = tmp_path / "out"
+    out.mkdir()
+    extract_zip(bad, out)
+
+    assert (out / "01 刑期二十年/00.jpg").is_file()  # 中文名已修正
+    assert not (tmp_path / "evil.txt").exists()      # 路径穿越被拦截
+    assert not (out / "abs.txt").exists()

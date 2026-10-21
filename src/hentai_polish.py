@@ -27,6 +27,7 @@ from pathlib import Path
 from _common import (
     OUTPUT_DIR_NAME,
     copy_mac_tags,
+    extract_zip,
     is_archive_file,
     is_image_file,
     iter_files,
@@ -103,8 +104,7 @@ def polish_from_archive(src_zip: Path, book_name: str, dst_cbz: Path) -> bool:
     """从单个压缩包整理出一本 cbz；无图片返回 False。成功时复制源包标签。"""
     with tempfile.TemporaryDirectory() as tmp:
         tmpdir = Path(tmp)
-        with zipfile.ZipFile(src_zip) as zf:
-            zf.extractall(tmpdir)
+        extract_zip(src_zip, tmpdir)
         imgs, skipped = collect_images(tmpdir)
         if not imgs:
             print(f"❌ {src_zip.name} 内未找到任何支持的图片")

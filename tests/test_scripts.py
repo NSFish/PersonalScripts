@@ -773,6 +773,68 @@ def test_convert_archives_batch_dir(tmp_path: Path):
     assert (out_dir / "a.avif").is_file()
 
 
+def _clear_utf8_flags(src_zip: Path, dst_zip: Path) -> None:
+    """清掉 local(+6) 与 central(+8) 两处 UTF-8 标记，模拟缺标记的压包工具出的坏包。"""
+    import struct
+
+    data = bytearray(src_zip.read_bytes())
+    i = 0
+    while True:
+        i = data.find(b"PK\x03\x04", i)
+        if i < 0:
+            break
+        struct.pack_into("<H", data, i + 6, struct.unpack_from("<H", data, i + 6)[0] & ~0x800)
+        i += 4
+    i = 0
+    while True:
+        i = data.find(b"PK\x01\x02", i)
+        if i < 0:
+            break
+        struct.pack_into("<H", data, i + 8, struct.unpack_from("<H", data, i + 8)[0] & ~0x800)
+        i += 4
+    dst_zip.write_bytes(data)
+
+
+def test_convert_single_archive_fixes_missing_utf8_flag_names(tmp_path: Path):
+    """缺 UTF-8 标记的中文包：日志不再乱码，输出包内恢复中文名并带上标记。"""
+    inner = tmp_path / "01 刑期二十年"
+    inner.mkdir()
+    make_img(inner / "00.jpg", 20, 20)
+    good = tmp_path / "good.zip"
+    with zipfile.ZipFile(good, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.write(inner / "00.jpg", "01 刑期二十年/00.jpg")
+    bad = tmp_path / "01 刑期二十年.zip"
+    _clear_utf8_flags(good, bad)
+    with zipfile.ZipFile(bad) as zf:
+        assert zf.infolist()[0].flag_bits == 0  # 确认坏包造出来了
+
+    r = run_ok("convert_image_format_to.py", "avif", str(bad))
+    assert "01 刑期二十年/00.avif" in r.stdout  # 日志是中文而非 σêæ… 乱码
+
+    out_zip = tmp_path / "result" / "01 刑期二十年.cbz"
+    assert out_zip.is_file()
+    with zipfile.ZipFile(out_zip) as zf:
+        assert zf.namelist() == ["01 刑期二十年/00.avif"]
+        assert zf.infolist()[0].flag_bits & 0x800  # 输出是规范的 UTF-8 包
+
+
+def test_unzip_all_fixes_missing_utf8_flag_names(tmp_path: Path):
+    """unzip_all 拍平时取包内中文名：坏包也应落盘中文名。"""
+    inner = tmp_path / "src"
+    inner.mkdir()
+    make_img(inner / "封面.jpg", 10, 10)
+    good = tmp_path / "p" / "book.zip"
+    good.parent.mkdir()
+    with zipfile.ZipFile(good, "w") as zf:
+        zf.write(inner / "封面.jpg", "第1话/封面.jpg")
+    bad = tmp_path / "p" / "bad.zip"
+    _clear_utf8_flags(good, bad)
+    good.unlink()
+
+    run_ok("unzip_all.py", str(tmp_path / "p"))
+    assert (tmp_path / "p" / "bad" / "封面.jpg").is_file()
+
+
 def test_hentai_polish_folder(tmp_path: Path):
     d = tmp_path / "doujin"
     d.mkdir()

@@ -24,6 +24,7 @@ from _common import (
     OUTPUT_DIR_NAME,
     VALID_OUTPUT_FORMATS,
     copy_mac_tags,
+    extract_zip,
     is_archive_file,
     is_image_file,
     iter_files,
@@ -85,8 +86,7 @@ def convert_single_archive(src_zip: Path, dst_zip: Path, out_format: str, tag: s
     target = _target_suffix(out_format)
     with tempfile.TemporaryDirectory() as tmp:
         tmpdir = Path(tmp)
-        with zipfile.ZipFile(src_zip) as zf:
-            zf.extractall(tmpdir)
+        extract_zip(src_zip, tmpdir)
         imgs = [p for p in iter_files(tmpdir) if is_image_file(p)]
         if not imgs:
             raise ValueError(f"{src_zip.name} 内未找到任何支持的图片")

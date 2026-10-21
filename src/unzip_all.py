@@ -10,7 +10,7 @@ import sys
 import zipfile
 from pathlib import Path
 
-from _common import is_archive_file, is_image_file
+from _common import fix_zip_filename, is_archive_file, is_image_file
 
 
 def extract_archive(archive: Path, input_dir: Path) -> int:
@@ -20,7 +20,8 @@ def extract_archive(archive: Path, input_dir: Path) -> int:
     moved = 0
     try:
         with zipfile.ZipFile(archive) as zf:
-            for name in zf.namelist():
+            for info in zf.infolist():
+                name = fix_zip_filename(info)  # 兼容缺 UTF-8 标记的中文包
                 if name.endswith(("/", "\\")):
                     continue
                 if not is_image_file(name):
@@ -35,7 +36,7 @@ def extract_archive(archive: Path, input_dir: Path) -> int:
                     continue
                 # 有图可写时才建目录：没图片的坏包不会留下空文件夹
                 target.mkdir(parents=True, exist_ok=True)
-                with zf.open(name) as src:
+                with zf.open(info) as src:
                     dest.write_bytes(src.read())
                 moved += 1
     except zipfile.BadZipFile as e:

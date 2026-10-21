@@ -9,6 +9,7 @@
 - 其余：pad / cn_to_arab / to_simplified / macOS 标签读写
 """
 import re
+import zipfile
 from pathlib import Path
 
 
@@ -82,6 +83,57 @@ def copy_mac_tags(src, dst) -> None:
 def is_hidden_part(part: str) -> bool:
     """路径的这一段是否该被排除：macOS 垃圾文件（.DS_Store / __MACOSX）或任意隐藏文件。"""
     return part in EXCLUDE_HIDDEN_FILES or part.startswith(".")
+
+
+def fix_zip_filename(info: zipfile.ZipInfo) -> str:
+    """修正缺 UTF-8 标记的 zip 条目名。
+
+    部分压包工具把 UTF-8 文件名存进包时没置 UTF-8 标记（flag_bits & 0x800 == 0），
+    zipfile 便按 cp437 解码，中文全变成 `σêæ...` 这类乱码。此时用原始字节
+    重解一次即可恢复：UTF-8 优先，失败再试 GB18030（兼容 Windows 中文包），
+    都失败则原样返回。已置标记的条目直接返回原名。
+    """
+    name = info.filename
+    if info.flag_bits & 0x800:
+        return name
+    try:
+        raw = name.encode("cp437")
+    except UnicodeEncodeError:
+        return name
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        pass
+    try:
+        return raw.decode("gb18030")
+    except UnicodeDecodeError:
+        return name
+
+
+def extract_zip(archive, dest_dir) -> None:
+    """解压 zip/cbz 到 dest_dir，顺手修正缺 UTF-8 标记的中文条目名。
+
+    与 ZipFile.extractall 等价，但条目名走 fix_zip_filename，且跳过
+    绝对路径/含 `..` 的条目（路径穿越防护）。
+    """
+    import shutil
+
+    dest = Path(dest_dir)
+    with zipfile.ZipFile(archive) as zf:
+        for info in zf.infolist():
+            fixed = fix_zip_filename(info)
+            if not fixed:
+                continue
+            rel = Path(fixed)
+            if rel.is_absolute() or ".." in rel.parts:
+                continue
+            target = dest / rel
+            if info.is_dir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with zf.open(info) as src, open(target, "wb") as out:
+                shutil.copyfileobj(src, out)
 
 
 def iter_files(root):
