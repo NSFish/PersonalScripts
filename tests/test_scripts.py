@@ -288,6 +288,57 @@ def test_chapter_pages_rename_by_order_dry_run_keeps_files(tmp_path: Path):
     assert '"a.jpg" -> "00.jpg"' in r.stdout
 
 
+def test_chapter_pages_rename_by_order_flat_archive(tmp_path: Path):
+    """单个压缩包（文件全在根）原地重写，包名不变。"""
+    cbz = tmp_path / "book.cbz"
+    with zipfile.ZipFile(cbz, "w") as zf:
+        for n in ["x.jpg", "y.jpg"]:
+            zf.writestr(n, b"x")
+
+    run_ok("chapter_pages_rename_by_order.py", str(cbz))
+    assert [p.name for p in tmp_path.iterdir()] == ["book.cbz"]  # 无残留临时包
+    with zipfile.ZipFile(cbz) as zf:
+        assert zf.namelist() == ["00.jpg", "01.jpg"]
+
+
+def test_chapter_pages_rename_by_order_single_top_folder(tmp_path: Path):
+    """包内唯一顶层文件夹：编号在文件夹内部进行，目录层保留。"""
+    zp = tmp_path / "book.zip"
+    with zipfile.ZipFile(zp, "w") as zf:
+        for n in ["book/c.jpg", "book/a.jpg", "book/b.jpg"]:
+            zf.writestr(n, b"x")
+
+    run_ok("chapter_pages_rename_by_order.py", str(zp))
+    with zipfile.ZipFile(zp) as zf:
+        assert zf.namelist() == ["book/00.jpg", "book/01.jpg", "book/02.jpg"]
+
+
+def test_chapter_pages_rename_by_order_archive_dry_run_keeps_zip(tmp_path: Path):
+    """dry-run 只打印计划，不重写压缩包。"""
+    zp = tmp_path / "book.cbz"
+    with zipfile.ZipFile(zp, "w") as zf:
+        zf.writestr("x.jpg", b"x")
+    before = zp.read_bytes()
+
+    r = run_ok("chapter_pages_rename_by_order.py", "-n", str(zp))
+    assert '"x.jpg" -> "00.jpg"' in r.stdout
+    assert zp.read_bytes() == before
+
+
+def test_chapter_pages_rename_by_order_archive_rejects_mixed_layout(tmp_path: Path):
+    """根目录散图 + 子文件夹混放：不支持，直接报错退出且不动原包。"""
+    zp = tmp_path / "book.zip"
+    with zipfile.ZipFile(zp, "w") as zf:
+        zf.writestr("loose.jpg", b"x")
+        zf.writestr("book/a.jpg", b"x")
+    before = zp.read_bytes()
+
+    r = run("chapter_pages_rename_by_order.py", str(zp))
+    assert r.returncode != 0
+    assert "不支持处理" in r.stdout
+    assert zp.read_bytes() == before
+
+
 def test_pages_organize(tmp_path: Path):
     d = tmp_path / "p"
     d.mkdir()
@@ -1063,16 +1114,83 @@ def test_bangumi_rename_idempotent(tmp_path: Path):
     assert "已重命名 0 项" in r.stdout, r.stdout
 
 
-def test_bangumi_rename_unsafe_title_chars(tmp_path: Path):
-    """标题里的 / 会让 with_name 抛错，必须替换成全角。"""
+def test_bangumi_rename_slash_in_title(tmp_path: Path):
+    """/ 在 macOS 上真的存不进文件名，必须换成全角（其余字符一律不动）。"""
     d = tmp_path / "p"
     d.mkdir()
     (d / "[组] 番剧 第1话.mkv").touch()
     src = tmp_path / "source.txt"
     src.write_text("1 与17年前一样的案发现场 B/F\n", encoding="utf-8")
     r = run_ok("bangumi_rename.py", "-s", str(src), "-d", str(d))
-    assert "非法字符" in r.stdout, r.stdout
+    assert "全角" in r.stdout, r.stdout
     assert (d / "1 与17年前一样的案发现场 B／F.mkv").is_file()
+
+
+def test_bangumi_rename_keeps_macos_legal_chars(tmp_path: Path):
+    """: * ? " < > | \\ 在 APFS 上都能存，不该被替换成 _（替了只会丢标题原貌）。"""
+    d = tmp_path / "p"
+    d.mkdir()
+    (d / "[组] 番剧 第1话.mkv").touch()
+    src = tmp_path / "source.txt"
+    title = '1 对决: 真相 <真> "谜" |答| *键* ?问? \\尾\\'
+    src.write_text(title + "\n", encoding="utf-8")
+    r = run_ok("bangumi_rename.py", "-s", str(src), "-d", str(d))
+    assert "全角" not in r.stdout, r.stdout          # 只有 / 才提示
+    names = [p.name for p in d.iterdir() if p.suffix == ".mkv"]
+    assert names == [title + ".mkv"], names          # 标题原样落地
+
+
+def test_bangumi_rename_idempotent_with_slash_title(tmp_path: Path):
+    """换成全角后重复运行须为空操作：source 与磁盘名两侧都走同一替换才对得上。"""
+    d = tmp_path / "p"
+    d.mkdir()
+    (d / "[组] 番剧 第1话.mkv").touch()
+    src = tmp_path / "source.txt"
+    src.write_text("1 与17年前一样的案发现场 B/F\n", encoding="utf-8")
+    run_ok("bangumi_rename.py", "-s", str(src), "-d", str(d))
+    assert (d / "1 与17年前一样的案发现场 B／F.mkv").is_file()
+
+    r = run_ok("bangumi_rename.py", "-s", str(src), "-d", str(d))
+    assert "已重命名 0 项" in r.stdout, r.stdout
+    assert [p.name for p in d.iterdir()] == ["1 与17年前一样的案发现场 B／F.mkv"]
+
+
+def test_bangumi_rename_unsafe_chars_in_unnumbered_line(tmp_path: Path):
+    """行首无数字的标题同样要清洗：只洗「有数字」分支会让 / 行照样崩在 with_name。"""
+    d = tmp_path / "p"
+    d.mkdir()
+    (d / "[组] 番剧 第1话.mkv").touch()
+    src = tmp_path / "source.txt"
+    src.write_text("标题/带斜杠\n", encoding="utf-8")     # 无集数 → 按上一条续 1
+    r = run_ok("bangumi_rename.py", "-s", str(src), "-d", str(d))
+    assert "全角" in r.stdout, r.stdout
+    assert (d / "1 标题／带斜杠.mkv").is_file()
+
+
+def test_bangumi_rename_folders_dotted_dirname(tmp_path: Path):
+    """--folders 时目录名的点不是扩展名：Ep.07 的 stem 是 Ep，会丢集数、还拼出假后缀。"""
+    d = tmp_path / "p"
+    for name in ("Ep.07", "Ep.08", "Ep.09"):
+        (d / name).mkdir(parents=True)
+    src = tmp_path / "source.txt"
+    src.write_text(SOURCE_24, encoding="utf-8")
+    r = run_ok("bangumi_rename.py", "-s", str(src), "-d", str(d), "--folders")
+    assert "待确认" not in r.stdout, r.stdout          # 集数必须认出来
+    assert (d / "07 标题7").is_dir()
+    assert (d / "09 标题9").is_dir()
+    assert not any(p.name.endswith(".07") for p in d.iterdir())   # 不能拼上假后缀
+
+
+def test_bangumi_rename_folders_no_bogus_suffix(tmp_path: Path):
+    """--folders 拼新名时不带后缀（Vol.1 -> '1 标题1' 而非 '1 标题1.1'）。"""
+    d = tmp_path / "p"
+    for name in ("Vol.1", "Vol.2", "Vol.3"):
+        (d / name).mkdir(parents=True)
+    src = tmp_path / "source.txt"
+    src.write_text(SOURCE_24, encoding="utf-8")
+    run_ok("bangumi_rename.py", "-s", str(src), "-d", str(d), "--folders", "--order", "--start", "1")
+    assert sorted(p.name for p in d.iterdir()) == ["01 标题1", "02 标题2", "03 标题3"]
+    assert not any(p.suffix for p in d.iterdir())       # 目录不该被拼上 .1/.2/.3
 
 
 def test_bangumi_rename_ext_filter_and_folders(tmp_path: Path):
