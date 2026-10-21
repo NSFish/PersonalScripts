@@ -38,6 +38,7 @@ bin/            just binsync 生成的全局命令垫片（不入库）
 | `generate_source_file.py` | 规范化文件名/文件夹名并生成 source.txt 排序列表 |
 | `hentai_download.py` | 下载本子漫画 |
 | `hentai_polish.py` | 本子一键整理（数字重命名→AVIF→CBZ） |
+| `hentai_quality_report.py` | 本子漫画质量体检：分辨率/等效 dpi/体积密度/细节/混叠/尺寸一致性 → 分级，可导出 JSON/CSV |
 | `hentai_rename.py` | 本子重命名 |
 | `hentai_zip_rename_inside.py` | 重新打包目录下的 zip（规范化内部结构与文件名，保留 macOS 标签） |
 | `jpeg_2_jpg.py` | 递归把 .jpeg 扩展名改为 .jpg |
