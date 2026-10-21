@@ -700,65 +700,6 @@ def test_convert_image_format_to_invalid_format_exits_nonzero(tmp_path: Path):
     assert r.returncode != 0
 
 
-def test_batch_convert_avif_all_avif_shortcut(tmp_path: Path):
-    d = tmp_path / "in"
-    d.mkdir()
-    zip_path = d / "book.zip"
-    with zipfile.ZipFile(zip_path, "w") as zf:
-        zf.writestr("page1.avif", b"dummy")  # 仅按扩展名判定，无需真实 avif
-
-    run_ok("batch_convert_image_format_inside_zip_to_avif.py", str(d))
-    out_zip = tmp_path / "result" / "book.cbz"
-    assert out_zip.is_file()        # 已复制到输出目录（无需转换）
-    assert zip_path.is_file()       # 原文件保留
-    with zipfile.ZipFile(out_zip) as zf:
-        assert zf.namelist() == ["page1.avif"]
-
-
-def test_batch_convert_avif_converts(tmp_path: Path):
-    d = tmp_path / "in"
-    d.mkdir()
-    inner = d / "book"
-    inner.mkdir()
-    make_img(inner / "a.jpg", 20, 20)
-    zip_path = d / "book.zip"
-    with zipfile.ZipFile(zip_path, "w") as zf:
-        zf.write(inner / "a.jpg", "a.jpg")
-    shutil.rmtree(inner)
-
-    run_ok("batch_convert_image_format_inside_zip_to_avif.py", str(d))
-    out_zip = tmp_path / "result" / "book.cbz"
-    assert out_zip.is_file()
-    with zipfile.ZipFile(out_zip) as zf:
-        # 万能入口保留包内原始目录结构，不再额外套一层包名文件夹
-        assert zf.namelist() == ["a.avif"]
-
-
-def test_batch_convert_avif_no_images_fails(tmp_path: Path):
-    d = tmp_path / "in"
-    d.mkdir()
-    with zipfile.ZipFile(d / "book.zip", "w") as zf:
-        zf.writestr("readme.txt", "no images here")
-
-    r = run("batch_convert_image_format_inside_zip_to_avif.py", str(d))
-    assert r.returncode != 0
-
-
-def test_batch_convert_avif_failure_raises(tmp_path: Path):
-    d = tmp_path / "in"
-    d.mkdir()
-    inner = d / "book"
-    inner.mkdir()
-    (inner / "bad.jpg").write_text("not a real image")  # primage 无法解码
-    zip_path = d / "book.zip"
-    with zipfile.ZipFile(zip_path, "w") as zf:
-        zf.write(inner / "bad.jpg", "bad.jpg")
-    shutil.rmtree(inner)
-
-    r = run("batch_convert_image_format_inside_zip_to_avif.py", str(d))
-    assert r.returncode != 0
-
-
 def test_convert_single_image_file(tmp_path: Path):
     img = tmp_path / "a.png"
     make_img(img, 20, 20)

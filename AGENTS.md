@@ -66,7 +66,7 @@
 | 扩展名 .jpeg → .jpg | `src/jpeg_2_jpg.py` |
 | 单张图片格式转换 | `src/primage_wrapper.py` |
 | 文件夹内图片批量转格式 | `src/convert_image_format_to.py` |
-| zip 内图片批量转 AVIF | `src/convert_image_format_to.py avif <文件夹>`（`batch_convert_...avif.py` 是它的兼容垫片） |
+| zip 内图片批量转 AVIF | `src/convert_image_format_to.py avif <文件夹>` |
 | 双页漫画裁切成单页 | `src/double_page_crop.py` |
 | 两张图片拼接（韩漫） | `src/page_concat.py` |
 | 图片裁剪 + 拼接 | `src/page_blender.py` |

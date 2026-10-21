@@ -23,7 +23,6 @@ bin/            just binsync 生成的全局命令垫片（不入库）
 | `content_opf_generate.py` | 生成 EPUB 的 `content.opf`（manifest + spine，元数据留空待填） |
 | `toc_ncx_generate.py` | 扫描 xhtml 生成 EPUB 的 `toc.ncx`（按卷/部/番外/章分层） |
 | `_common.py` | 公共工具：图片扩展名判断、自然排序、零填充、中文数字转阿拉伯、macOS 标签读写 |
-| `batch_convert_image_format_inside_zip_to_avif.py` | 批量把 zip 内的图片转为 AVIF（已并入 `convert_image_format_to.py`，本脚本为兼容老用法的薄垫片） |
 | `chapter_pages_rename_by_order.py` | 递归把每个子目录里的文件按排序重命名为零填充序号（命名规则唯一来源，被 `ebook_2_zip.py` 复用） |
 | `check_page_width.py` | 扫描文件夹，统计图片主流宽度并列出不符合的图片 |
 | `cn_numbers_rename.py` | 把子文件夹名里的中文/阿拉伯数字序号规范化（`--style prefix` 加序号前缀 / `replace` 原地替换，均幂等） |
