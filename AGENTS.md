@@ -89,5 +89,7 @@
 | 文件夹 → 合规 EPUB（mimetype 不压缩置首） | `src/compress_epub.py` |
 | 生成 EPUB 的 content.opf | `src/content_opf_generate.py` |
 | 生成 EPUB 的 toc.ncx（卷/章导航） | `src/toc_ncx_generate.py` |
+| exhentai 白屏（IP 被拉黑 / 残留 `igneous=mystery`） | `src/exhentai_unblock.py`（`check` 只诊断，`fix` 删坏 cookie） |
+| 导出浏览器 cookie 给 gallery-dl 用 | `src/export_cookies.py` |
 
 > 公共逻辑一律走 `src/_common.py`；需要新能力时先复用上面脚本再扩展。

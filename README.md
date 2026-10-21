@@ -32,7 +32,8 @@ bin/            just binsync 生成的全局命令垫片（不入库）
 | `edge_clean.py` | 清理 Microsoft Edge 堆积的更新备份与组件缓存 |
 | `epub_2_md.py` | 扫描版 EPUB → Markdown（Vision OCR + 按 TOC 切章） |
 | `epub_2_zip.py` | 把 EPUB 转成 CBZ/zip（抽取图片与 XHTML 重新打包） |
-| `export_cookies.py` | 导出浏览器 cookies |
+| `export_cookies.py` | 导出浏览器 cookies 为 Netscape 格式（`--browser edge/chrome`；`read_cookies` 供其它脚本复用） |
+| `exhentai_unblock.py` | 修复 exhentai 白屏：诊断节点是否被拉黑，只删坏掉的 `igneous` 并保留登录状态 |
 | `format_xhtml.py` | EPUB XHTML 文件格式化（文件名排序处理） |
 | `generate_source_file.py` | 规范化文件名/文件夹名并生成 source.txt 排序列表 |
 | `hentai_download.py` | 下载本子漫画 |
