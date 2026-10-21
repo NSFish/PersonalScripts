@@ -81,7 +81,7 @@
 | 番剧/剧集按 source.txt 猜集数重命名 | `src/bangumi_rename.py`（自动从文件名猜集数，无需正则；替代 BangumiRenamer） |
 | OCR（macOS Vision） | `src/ocr_process.py` |
 | 按关键词筛选图片 | `src/keywords_searching.py` |
-| zip 重新打包/规范化 | `src/hentai_zip_rename_inside.py` |
+| zip/cbz 重新打包/规范化（包名同步到包内顶层文件夹） | `src/hentai_zip_rename_inside.py` |
 | 本子一键整理（数字重命名→AVIF→CBZ） | `src/hentai_polish.py` |
 | EPUB → CBZ/zip | `src/epub_2_zip.py` |
 | MOBI/EPUB → CBZ（电子书转漫画包） | `src/ebook_2_zip.py` |

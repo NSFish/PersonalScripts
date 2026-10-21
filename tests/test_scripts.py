@@ -398,6 +398,7 @@ def test_unzip_all_accepts_cbz(tmp_path: Path):
 
 
 def test_zip_all(tmp_path: Path):
+    """默认出 .cbz（漫画阅读器认的扩展名），包内保留 <子文件夹名>/ 顶层结构。"""
     d = tmp_path / "p"
     d.mkdir(parents=True, exist_ok=True)
     sub = d / "sub"
@@ -405,10 +406,24 @@ def test_zip_all(tmp_path: Path):
     make_img(sub / "a.jpg", 10, 10)
 
     run_ok("zip_all.py", str(d))
-    zp = d / "sub.zip"
+    zp = d / "sub.cbz"
     assert zp.is_file()
+    assert not (d / "sub.zip").exists()
     with zipfile.ZipFile(zp) as zf:
         assert "sub/a.jpg" in zf.namelist()
+
+
+def test_zip_all_ext_zip(tmp_path: Path):
+    """--ext zip 仍可出 .zip。"""
+    d = tmp_path / "p"
+    d.mkdir(parents=True, exist_ok=True)
+    sub = d / "sub"
+    sub.mkdir(parents=True, exist_ok=True)
+    make_img(sub / "a.jpg", 10, 10)
+
+    run_ok("zip_all.py", str(d), "--ext", "zip")
+    assert (d / "sub.zip").is_file()
+    assert not (d / "sub.cbz").exists()
 
 
 def test_page_blender(tmp_path: Path):
@@ -521,6 +536,31 @@ def test_hentai_zip_rename_inside_ignores_stale_tmp_zip(tmp_path: Path):
     r = run("hentai_zip_rename_inside.py", str(d))
     assert r.returncode == 0
     assert stale.read_bytes() == b"garbage"  # 原样保留，未被改动
+
+
+def test_hentai_zip_rename_inside_handles_cbz(tmp_path: Path):
+    d = tmp_path / "p"
+    d.mkdir()
+    cbz_path = d / "mycomic.cbz"
+    with zipfile.ZipFile(cbz_path, "w") as zf:
+        zf.writestr("oldname/a.txt", "hello")
+
+    run_ok("hentai_zip_rename_inside.py", str(d))
+    # 扩展名保持不变，仍是 .cbz
+    assert cbz_path.is_file()
+    with zipfile.ZipFile(cbz_path) as zf:
+        assert any(n.startswith("mycomic/") for n in zf.namelist())
+
+
+def test_hentai_zip_rename_inside_ignores_stale_tmp_cbz(tmp_path: Path):
+    d = tmp_path / "p"
+    d.mkdir()
+    stale = d / "book.tmp.cbz"
+    stale.write_bytes(b"garbage")
+
+    r = run("hentai_zip_rename_inside.py", str(d))
+    assert r.returncode == 0
+    assert stale.read_bytes() == b"garbage"
 
 
 def test_hentai_zip_rename_inside_preserves_mac_tags(tmp_path: Path):
