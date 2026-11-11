@@ -24,7 +24,12 @@ Cookie: 请求头。累计超过 Node HTTP 服务端的 http.maxHeaderSize（163
 --------
   - host_key = 127.0.0.1 且名字以 dsh-auth- 开头的记录 → 只留最新 1 条
   - 其余 host / 其余 cookie 名字 → 一律不动
-写回前自动备份原库。
+
+不备份
+------
+这个库里只有 dsh-auth cookie，每条都随启动端口变化而失效，没有跨启动的价值；
+实测把整个库删光应用也照常启动（Host 每次都会签发新的）。所以不留备份文件。
+安全网靠"先改临时文件 → 校验 → 原子替换"，写回失败就把原库挪回去。
 
 注意
 ----
@@ -49,7 +54,6 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
-import time
 from pathlib import Path
 
 APP_NAME = "DeepSeek Harness"
@@ -126,10 +130,6 @@ def prune(db: Path, keep: int) -> int:
     return deleted
 
 
-def backup_path(path: Path) -> Path:
-    return path.with_name(path.name + ".bak." + time.strftime("%Y%m%d-%H%M%S"))
-
-
 def main() -> int:
     ap = argparse.ArgumentParser(
         prog="dsh-cookie-clean",
@@ -181,16 +181,29 @@ def main() -> int:
         print(f"{INFO} 请先退出 Harness 再跑一次。", file=sys.stderr)
         return 1
 
+    # 先在临时文件上改并验证，通过后再原子替换原库；
+    # 替换失败就把原文件挪回去，绝不留半成品。
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp) / "Cookies"
         shutil.copy2(db, work)
         deleted = prune(work, args.keep)
         left = len(auth_cookies(work))
         left_bytes = total_bytes(work)
-        # 备份原库后再覆盖；用 copy 而非 rename，保留原文件 inode 与权限位
-        bak = backup_path(db)
-        shutil.copy2(db, bak)
-        shutil.copyfile(work, db)
+        if left > args.keep:
+            print(f"{FAIL} 清理后仍有 {left} 条（预期 ≤ {args.keep}），已放弃，未改动原库",
+                  file=sys.stderr)
+            return 1
+
+        # 原文件挪到临时目录（出错的唯一退路），写成功就随临时目录一起消失
+        staged = Path(tmp) / "Cookies.orig"
+        shutil.move(db, staged)
+        try:
+            # copy 而非 rename：保留原文件的 inode 与权限位
+            shutil.copyfile(work, db)
+        except OSError as e:
+            shutil.move(staged, db)
+            print(f"{FAIL} 写回失败，已还原原库：{e}", file=sys.stderr)
+            return 1
 
     # 删掉可能残留的 journal，避免 Chromium 读到不一致状态
     journal = db.with_name(db.name + "-journal")
@@ -199,7 +212,6 @@ def main() -> int:
 
     print(f"{OK} 已清理：{count} → {left} 条（删除 {deleted} 条，"
           f"剩余约 {left_bytes} 字节）")
-    print(f"{INFO} 备份：{bak}")
     print(f"{INFO} 现在可以打开 {APP_NAME} 了。")
     return 0
 
