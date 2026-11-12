@@ -28,7 +28,6 @@ bin/            just binsync 生成的全局命令垫片（不入库）
 | `cn_numbers_rename.py` | 把子文件夹名里的中文/阿拉伯数字序号规范化（`--style prefix` 加序号前缀 / `replace` 原地替换，均幂等） |
 | `convert_image_format_to.py` | 图片格式万能转换（jpeg/png/webp/avif）：单张图/图片文件夹/单个 .zip/.cbz/批量包文件夹，输出到父目录 `result/` |
 | `double_page_crop.py` | 把宽幅双页漫画图按中线裁切成左右两张单页 |
-| `dsh_cookie_clean.py` | 清理 DeepSeek Harness 堆积的 dsh-auth cookie（只留最新几条，避免请求头超 16 KB 导致启动失败） |
 | `ebook_2_zip.py` | 把 MOBI/EPUB 转成 CBZ（漫画模式抽取 image/images 目录重新打包，支持批量与断点续跑） |
 | `edge_clean.py` | 清理 Microsoft Edge 堆积的更新备份与组件缓存 |
 | `epub_2_md.py` | 扫描版 EPUB → Markdown（Vision OCR + 按 TOC 切章） |
